@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Discord;
 using System.Text.RegularExpressions;
+using Discord.Commands;
 
 namespace SinobigamiBot
 {
@@ -27,9 +28,33 @@ namespace SinobigamiBot
             if (clientId != null && bool.Parse(ini.GetValue("BotSetting", "OpenInviteUrl")))
                 System.Diagnostics.Process.Start($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
 
-            client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);           
+            // Use Command
+            /*
+            client.UsingCommands(x =>
+            {
+                x.PrefixChar = '/';
+                x.HelpMode = HelpMode.Public;
+            });
+            */
 
+            // Dice roll
+            client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
+            // Dice Rest
+            client.MessageReceived += async (s, e) => await ResetDice(s, e);
+
+            // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
+        }
+
+        private async Task ResetDice(object sender, MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var regex = new Regex(@"まそっぷ|masop");
+            if (regex.IsMatch(e.Message.Text.Trim()))
+            {
+                random = new Random();
+                await e.Channel.SendMessage("まそっぷ！");
+            }
         }
 
         /// <summary>
@@ -68,6 +93,7 @@ namespace SinobigamiBot
             await e.Channel.SendMessage(e.User.Mention + " " + result);
             return;
         }
+
 
         /// <summary>
         /// 全角英数字を半角に
