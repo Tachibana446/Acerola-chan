@@ -45,7 +45,7 @@ namespace SinobigamiBot
         }
 
         /// <summary>
-        /// 値の取得　
+        /// 値の取得　見つからなければnull
         /// </summary>
         /// <param name="section">セクション名のプロパティ</param>
         /// <param name="key">キー名のプロパティ</param>

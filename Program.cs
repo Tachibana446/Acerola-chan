@@ -20,6 +20,11 @@ namespace SinobigamiBot
         Random random = new Random();
 
         Dictionary<User, List<int>> Plots { get; set; } = new Dictionary<User, List<int>>();
+        List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
+        /// <summary>
+        /// プロットの表示時に自動的にプロットをリセットするか
+        /// </summary>
+        bool ResetPlotOnShow = false;
 
         public void Start()
         {
@@ -29,6 +34,9 @@ namespace SinobigamiBot
 
             if (clientId != null && bool.Parse(ini.GetValue("BotSetting", "OpenInviteUrl")))
                 System.Diagnostics.Process.Start($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
+
+            var rpFlag = ini.GetValue("BotSetting", "ResetPlot");
+            if (rpFlag != null) ResetPlotOnShow = bool.Parse(rpFlag);
 
             // Use Command
             /*
@@ -42,14 +50,16 @@ namespace SinobigamiBot
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
             // Dice Rest
-            client.MessageReceived += async (s, e) => await ResetDice(s, e);
+            client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
 
             // Set Plot
-            client.MessageReceived += async (s, e) => await SetPlot(e);
+            client.MessageReceived += async (s, e) => await SetPlotEvent(e);
+            // Set Plot Again
+            client.MessageReceived += async (s, e) => await AgainSetPlot(e);
             // Reset Plot
-            client.MessageReceived += async (s, e) => await ResetPlot(e);
+            client.MessageReceived += async (s, e) => await ResetPlotEvent(e);
             // Show Plot
-            client.MessageReceived += async (s, e) => await ShowPlot(e);
+            client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
@@ -61,7 +71,7 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="e"></param>
         /// <returns></returns>
-        private async Task SetPlot(MessageEventArgs e)
+        private async Task SetPlotEvent(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
             var text = ToNarrow(e.Message.Text);
@@ -112,17 +122,51 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// 影分身などでプロットを後から再決定する場合
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task AgainSetPlot(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            string text = ToNarrow(e.Message.Text);
+            var regex = new Regex(@"^(再セット|reset).*(\d+)");
+            var match = regex.Match(text);
+            if (match.Success)
+            {
+                int plot = int.Parse(match.Groups[2].Value);
+                if (plot < 1 || plot > 6)
+                {
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は１～６です");
+                    return;
+                }
+                // Plotsが空なら一つ前の物を
+                if (Plots.Keys.Count == 0)
+                {
+                    if (OldPlots.Count == 0)
+                    {
+                        await e.Channel.SendMessage(e.User.Mention + " まずはsetで普通にプロット値を決めてください");
+                        return;
+                    }
+                    Plots = OldPlots.Last();
+                }
+                Plots[e.User] = new int[] { plot }.ToList();
+                await e.Channel.SendMessage(e.User.Mention + " 了解");
+            }
+        }
+
+        /// <summary>
         /// プロット値のリセット
         /// </summary>
         /// <param name="e"></param>
         /// <returns></returns>
-        private async Task ResetPlot(MessageEventArgs e)
+        private async Task ResetPlotEvent(MessageEventArgs e)
         {
             if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
             var regex = new Regex(@"プロット.*リセット");
             if (regex.IsMatch(e.Message.Text))
             {
-                Plots = new Dictionary<User, List<int>>();
+                ResetPlot();
                 await e.Channel.SendMessage("プロット値をリセットしました");
             }
         }
@@ -131,14 +175,15 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="e"></param>
         /// <returns></returns>
-        private async Task ShowPlot(MessageEventArgs e)
+        private async Task ShowPlotEvent(MessageEventArgs e)
         {
             if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
             var regex = new Regex(@"プロット.*表示");
             if (regex.IsMatch(e.Message.Text))
             {
-                var debug = ResharpPlot();
                 MakeGraph.Make(ResharpPlot(), "./plot.png");
+                if (ResetPlotOnShow)
+                    ResetPlot();
                 await e.Channel.SendFile("./plot.png");
             }
         }
@@ -147,7 +192,7 @@ namespace SinobigamiBot
         /// ダイスのリセットを行う
         /// </summary>
         /// <returns></returns>
-        private async Task ResetDice(object sender, MessageEventArgs e)
+        private async Task ResetDiceEvent(object sender, MessageEventArgs e)
         {
             if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
             var regex = new Regex(@"まそっぷ|masop");
@@ -198,6 +243,15 @@ namespace SinobigamiBot
         // ----------------------------------------------------- //
         //                    Util                               //
         // ----------------------------------------------------- //
+
+        /// <summary>
+        /// Plotsを空にして、過去ログにしまう
+        /// </summary>
+        private void ResetPlot()
+        {
+            OldPlots.Add(Plots);
+            Plots = new Dictionary<User, List<int>>();
+        }
 
         /// <summary>
         /// プロット値を表に整形
