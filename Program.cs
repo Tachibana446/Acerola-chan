@@ -19,6 +19,8 @@ namespace SinobigamiBot
 
         Random random = new Random();
 
+        Dictionary<User, List<int>> Plots { get; set; } = new Dictionary<User, List<int>>();
+
         public void Start()
         {
             var token = ini.GetValue("BotSetting", "Token");
@@ -42,10 +44,109 @@ namespace SinobigamiBot
             // Dice Rest
             client.MessageReceived += async (s, e) => await ResetDice(s, e);
 
+            // Set Plot
+            client.MessageReceived += async (s, e) => await SetPlot(e);
+            // Reset Plot
+            client.MessageReceived += async (s, e) => await ResetPlot(e);
+            // Show Plot
+            client.MessageReceived += async (s, e) => await ShowPlot(e);
+
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
 
+
+        /// <summary>
+        /// プロット値の設定
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetPlot(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = ToNarrow(e.Message.Text);
+            var regex = new Regex(@"^(セット|せっと|set).*(\d+)");
+            var andRegex = new Regex(@"^(セット|せっと|set).*(\d+).*(a|A)nd.*(\d+)");
+            var match = regex.Match(text);
+            var andMatch = andRegex.Match(text);
+
+            var plots = new List<int>();
+
+            if (andMatch.Success)
+            {
+                int plot1 = int.Parse(andMatch.Groups[2].Value);
+                int plot2 = int.Parse(andMatch.Groups[4].Value);
+
+                if (plot1 < 1 || plot1 > 6 || plot2 < 1 || plot2 > 6)
+                {
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6です");
+                    return;
+                }
+                plots.Add(plot1);
+                plots.Add(plot2);
+                plots.Sort();
+            }
+            else if (match.Success)
+            {
+                int plot = int.Parse(match.Groups[2].Value);
+                if (plot < 1 || plot > 6)
+                {
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6です");
+                    return;
+                }
+                plots.Add(plot);
+            }
+            else
+            {
+                return;
+            }
+            if (!Plots.Keys.Contains(e.User))
+            {
+                Plots.Add(e.User, plots);
+            }
+            else
+            {
+                Plots[e.User] = plots;
+            }
+            await e.Channel.SendMessage(e.User.Mention + " 了解");
+        }
+
+        /// <summary>
+        /// プロット値のリセット
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task ResetPlot(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var regex = new Regex(@"プロット.*リセット");
+            if (regex.IsMatch(e.Message.Text))
+            {
+                Plots = new Dictionary<User, List<int>>();
+                await e.Channel.SendMessage("プロット値をリセットしました");
+            }
+        }
+        /// <summary>
+        /// プロットの表示
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task ShowPlot(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var regex = new Regex(@"プロット.*表示");
+            if (regex.IsMatch(e.Message.Text))
+            {
+                var debug = ResharpPlot();
+                MakeGraph.Make(ResharpPlot(), "./plot.png");
+                await e.Channel.SendFile("./plot.png");
+            }
+        }
+
+        /// <summary>
+        /// ダイスのリセットを行う
+        /// </summary>
+        /// <returns></returns>
         private async Task ResetDice(object sender, MessageEventArgs e)
         {
             if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
@@ -94,6 +195,83 @@ namespace SinobigamiBot
             return;
         }
 
+        // ----------------------------------------------------- //
+        //                    Util                               //
+        // ----------------------------------------------------- //
+
+        /// <summary>
+        /// プロット値を表に整形
+        /// </summary>
+        /// <returns></returns>
+        private string ResharpPlot()
+        {
+            string text = "";
+            // プロットごとに振り分ける
+            List<List<string>> plots = new List<List<string>>();
+            for (int i = 0; i < 6; i++)
+                plots.Add(new List<string>());
+
+            foreach (User user in Plots.Keys)
+            {
+                foreach (int p in Plots[user])
+                {
+                    plots[p - 1].Add(user.Name);
+                }
+            }
+            // そのプロットでの最大の文字列のユーザー名
+            int[] maxs = new int[6];
+            for (int i = 0; i < 6; i++)
+            {
+                int maxLen = 3;
+                foreach (var name in plots[i])
+                {
+                    if (name.Length > maxLen)
+                        maxLen = name.Length;
+                }
+                maxs[i] = maxLen;
+            }
+            // 先頭行
+            for (int i = 0; i < 6; i++)
+            {
+                text += ToCenter(ToWide((i + 1).ToString()), maxs[i]) + "|";
+            }
+            text += "\n";
+            // ユーザーの行
+            while (true)
+            {
+                bool flag = false;
+                for (int i = 0; i < 6; i++)
+                {
+                    if (plots[i].Count != 0)
+                    {
+                        flag = true;
+                        var username = ToCenter(ToWide(Pop(plots[i])), maxs[i]);
+                        text += username + "|";
+                    }
+                    else
+                    {
+                        text += ToCenter("　", maxs[i]) + "|";
+                    }
+                }
+                text += "\n";
+                if (!flag) break;
+            }
+            return text;
+        }
+
+        /// <summary>
+        /// 先頭のアイテムをポップ（返して削除）
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <returns></returns>
+        public static T Pop<T>(List<T> list)
+        {
+            var res = list[0];
+            list.RemoveAt(0);
+            return res;
+        }
+
 
         /// <summary>
         /// 全角英数字を半角に
@@ -115,6 +293,42 @@ namespace SinobigamiBot
                     output += c;
             }
             return output;
+        }
+
+        public static string ToWide(string input)
+        {
+            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ";
+            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+            string output = "";
+            foreach (var c in input)
+            {
+                int index = narrow.IndexOf(c);
+                if (index >= 0)
+                    output += wide[index];
+                else
+                    output += c;
+            }
+            return output;
+        }
+
+        /// <summary>
+        /// 文字を中央揃え
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        public static string ToCenter(string input, int size, string pad = "　")
+        {
+            if (input.Length >= size) return input;
+            int diff = size - input.Length;
+            int right = diff / 2;
+            int left = diff - right;
+            string result = "";
+            for (int i = 0; i < left; i++) result += pad;
+            result += input;
+            for (int i = 0; i < right; i++) result += pad;
+            return result;
         }
     }
 }
