@@ -10,6 +10,8 @@ namespace SinobigamiBot
     {
         static void Main(string[] args)
         {
+            var ini = new IniFile();
+            var val = ini.GetValue(nameof(ini.TestSection),nameof(ini.TestValue));
         }
     }
 }
