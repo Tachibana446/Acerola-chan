@@ -60,6 +60,8 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await SetEmotion(e);
             // Select Choice
             client.MessageReceived += async (s, e) => await SelectEmotion(e);
+            // Show Emotions List
+            client.MessageReceived += async (s, e) => await ShowEmotionList(e);
 
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
@@ -213,6 +215,26 @@ namespace SinobigamiBot
             {
                 MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
                 await e.Channel.SendFile("./relation.png");
+            }
+        }
+
+        private async Task ShowEmotionList(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var regex = new Regex(@"^感情リスト");
+            if (regex.IsMatch(e.Message.Text))
+            {
+                var info = UserInfos.Find(i => i.User.Id == e.User.Id);
+                if (info == null) throw new Exception("UserInfoがNull");
+                string message = "";
+                foreach (var emo in info.Emotions)
+                {
+                    var name = emo.Key.Nickname != null ? emo.Key.Nickname : emo.Key.Name;
+                    message += $"\n- {name}\t: {emo.Value.Name}";
+                }
+                if (message == "")
+                    message = "誰にも感情を抱いていません";
+                await e.Channel.SendMessage(e.User.Mention + " " + message);
             }
         }
 
