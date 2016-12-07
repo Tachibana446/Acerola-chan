@@ -18,9 +18,18 @@ namespace SinobigamiBot
 
         public System.Drawing.Point Point { get; set; }
 
+        // 文字に掛からない上下左右の点
+        public List<System.Drawing.Point> Points { get; set; } = new List<System.Drawing.Point>();
+
         public UserInfo(User user)
         {
             User = user;
+        }
+
+        public UserInfo(User user, Dictionary<User, Emotion> emotions)
+        {
+            User = user;
+            Emotions = emotions;
         }
 
         public void SetEmotion(User target, Emotion emotion)
@@ -29,6 +38,35 @@ namespace SinobigamiBot
                 Emotions[target] = emotion;
             else
                 Emotions.Add(target, emotion);
+        }
+
+        public System.Drawing.Point GetNearPoint(System.Drawing.Point p)
+        {
+            double? min = null;
+            System.Drawing.Point? minP = null;
+            foreach (var pp in Points)
+            {
+                if (min == null)
+                {
+                    min = Distance(p, pp);
+                    minP = pp;
+                }
+                else
+                {
+                    var dis = Distance(p, pp);
+                    if (min > dis)
+                    {
+                        min = dis;
+                        minP = pp;
+                    }
+                }
+            }
+            return (System.Drawing.Point)minP;
+        }
+
+        private double Distance(System.Drawing.Point p1, System.Drawing.Point p2)
+        {
+            return Math.Abs(Math.Sqrt(Math.Pow((p1.X - p2.X), 2) + Math.Pow((p1.Y - p2.Y), 2)));
         }
     }
 
@@ -74,10 +112,23 @@ namespace SinobigamiBot
         {
             return EmotionList[new Random().Next(EmotionList.Count)];
         }
+
+        public new string ToString()
+        {
+            return $"{Name},{Type.ToString()}";
+        }
+
+        public static EmotionType ParseEmotionType(string str)
+        {
+            if (str.Trim() == "plus")
+                return EmotionType.plus;
+            else
+                return EmotionType.minus;
+        }
     }
 
     enum EmotionType
     {
-        plus, minus, none
+        plus, minus
     }
 }

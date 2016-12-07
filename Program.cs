@@ -82,15 +82,23 @@ namespace SinobigamiBot
 
         /// <summary>
         /// 最初にユーザーを全部リストに入れる
+        /// 保存ファイルがあればそちらを読み込む
         /// </summary>
         /// <param name="e"></param>
         private void SetUserInfos(MessageEventArgs e)
         {
             if (UserInfos.Count > 0) return;
-            foreach (var user in e.Channel.Users)
+            if (ExistsUserInfoFile(e.Server))
             {
-                // TODO: botとGMを省く
-                UserInfos.Add(new UserInfo(user));
+                LoadUserInfo(e);
+            }
+            else
+            {
+                foreach (var user in e.Channel.Users)
+                {
+                    // TODO: botとGMを省く
+                    UserInfos.Add(new UserInfo(user));
+                }
             }
         }
 
@@ -178,7 +186,8 @@ namespace SinobigamiBot
             var uInfo = UserInfos.First(u => u.User.Id == e.User.Id);
             uInfo.SetEmotion(setEmotionTemp[e.User].Item1, em);
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得ました");
-            setEmotionTemp.Remove(e.User);
+            setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
+            SaveUserInfo(e.Server);         // 保存
         }
 
         private bool isGM(User user)
@@ -384,6 +393,89 @@ namespace SinobigamiBot
         // ----------------------------------------------------- //
         //                    Util                               //
         // ----------------------------------------------------- //
+
+        /// <summary>
+        /// UserInfoの保存ファイルがあるかどうか
+        /// </summary>
+        /// <param name="server"></param>
+        /// <returns></returns>
+        private bool ExistsUserInfoFile(Server server)
+        {
+            return System.IO.File.Exists($"./{server.Id}.txt");
+        }
+
+        /// <summary>
+        /// UserInfoを保存する
+        /// </summary>
+        private void SaveUserInfo(Server server)
+        {
+            var sw = new System.IO.StreamWriter($"./{server.Id}.txt");
+            foreach (var user in UserInfos)
+            {
+                sw.WriteLine("[User]");
+                sw.WriteLine(user.User.Id);
+                sw.WriteLine($"{user.Point.X},{user.Point.Y}");
+                foreach (var emo in user.Emotions)
+                {
+                    sw.WriteLine(emo.Key.Id + "," + emo.Value.ToString());
+                }
+                sw.WriteLine("[UserEnd]");
+            }
+            sw.Close();
+        }
+
+        private void LoadUserInfo(MessageEventArgs e)
+        {
+            var lines = System.IO.File.ReadLines($"./{e.Server.Id}.txt");
+            User nowUser = null;
+            System.Drawing.Point nowPoint = new System.Drawing.Point(0, 0);
+            var nowEmotions = new Dictionary<User, Emotion>();
+            // 1:UserId 2:Point 3:Emotions 4:SkipToNextUser
+            int phase = 0;
+
+            foreach (var line in lines)
+            {
+                // Userの区切りなら現在の値を代入してリセット
+                if (line.Trim() == "[UserEnd]")
+                {
+                    UserInfos.Add(new UserInfo(nowUser, nowEmotions));
+                    continue;
+                }
+                if (line.Trim() == "[User]")
+                {
+                    phase = 1;
+                    nowPoint = new System.Drawing.Point(0, 0);
+                    nowEmotions = new Dictionary<User, Emotion>();
+                    continue;
+                }
+                switch (phase)
+                {
+                    case 1:
+                        ulong id = ulong.Parse(line);
+                        nowUser = e.Channel.Users.First(u => u.Id == id);
+                        if (nowUser == null) phase = 4;
+                        else phase = 2;
+                        break;
+                    case 2:
+                        var points = line.Split(',').Select(a => int.Parse(a));
+                        nowPoint = new System.Drawing.Point(points.ElementAt(0), points.ElementAt(1));
+                        phase = 3;
+                        break;
+                    case 3:
+                        var str = line.Split(',');
+                        Emotion emo = new Emotion(str[1], Emotion.ParseEmotionType(str[2]));
+                        ulong toId = ulong.Parse(str[0]);
+                        User toUser = e.Channel.Users.First(u => u.Id == toId);
+                        if (toUser == null) continue;
+                        nowEmotions.Add(toUser, emo);
+                        break;
+                    case 4:
+                        continue;
+                    default:
+                        break;
+                }
+            }
+        }
 
         /// <summary>
         /// Plotsを空にして、過去ログにしまう
