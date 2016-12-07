@@ -56,6 +56,10 @@ namespace SinobigamiBot
             client.MessageReceived += (s, e) => SetUserInfos(e);
             // Send Relation
             client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
+            // Show Choices Emotion
+            client.MessageReceived += async (s, e) => await SetEmotion(e);
+            // Select Choice
+            client.MessageReceived += async (s, e) => await SelectEmotion(e);
 
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
@@ -88,6 +92,103 @@ namespace SinobigamiBot
                 // TODO: botとGMを省く
                 UserInfos.Add(new UserInfo(user));
             }
+        }
+
+        /// <summary>
+        /// 感情を登録する際に使う一時変数
+        /// [ユーザー] => {対象ユーザー, 対象感情}
+        /// </summary>
+        Dictionary<User, Tuple<User, string>> setEmotionTemp = new Dictionary<User, Tuple<User, string>>();
+
+        /// <summary>
+        /// 取得する感情の候補を出す
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetEmotion(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var regex = new Regex(@"^感情.*取得(.*)");
+            var match = regex.Match(e.Message.Text);
+            if (match.Success)
+            {
+                var target = match.Groups[1].Value.Replace('　', ' ').Trim();
+                bool enableTarget = false;
+                User targetUser = null;
+                var reg = new Regex(target);
+                if (target != "")
+                {
+                    var notGMandBOTusers = e.Channel.Users.ToList().FindAll(x => !x.IsBot).FindAll(y => !isGM(y));
+                    // DEBUG
+                    notGMandBOTusers = e.Channel.Users.ToList();
+                    foreach (var u in notGMandBOTusers)
+                    {
+                        if (reg.IsMatch(u.Name) || (u.Nickname != null && reg.IsMatch(u.Nickname)))
+                        {
+                            enableTarget = true;
+                            targetUser = u;
+                            break;
+                        }
+                    }
+                }
+                if (enableTarget)
+                {
+                    var choice = Emotion.RandomChoice();
+                    if (setEmotionTemp.ContainsKey(e.User))
+                    {
+                        setEmotionTemp[e.User] = new Tuple<User, string>(targetUser, choice);
+                    }
+                    else
+                    {
+                        setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser, choice));
+                    }
+                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得しますか(プラスかマイナスかで返信）");
+                }
+                else
+                {
+                    await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてください");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 感情を選択し、取得する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SelectEmotion(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var regex = new Regex(@"プラス|マイナス");
+            var match = regex.Match(e.Message.Text);
+
+            if (!match.Success) return;
+            if (!setEmotionTemp.ContainsKey(e.User))
+            {
+                await e.Channel.SendMessage(e.User.Mention + " まずは「感情取得」で感情の選択肢を表示させてください");
+                return;
+            }
+            int index = Emotion.EmotionList.IndexOf(setEmotionTemp[e.User].Item2);
+            if (index == -1) throw new Exception("EmotionList index -1");
+            Emotion em;
+            if (match.Value == "プラス")
+                em = Emotion.PlusEmotions[index];
+            else
+                em = Emotion.MinusEmotions[index];
+            var uInfo = UserInfos.First(u => u.User.Id == e.User.Id);
+            uInfo.SetEmotion(setEmotionTemp[e.User].Item1, em);
+            await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得ました");
+            setEmotionTemp.Remove(e.User);
+        }
+
+        private bool isGM(User user)
+        {
+            foreach (var r in user.Roles)
+            {
+                if (r.Name.Contains("GM"))
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>
