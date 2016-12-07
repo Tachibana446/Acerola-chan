@@ -26,6 +26,11 @@ namespace SinobigamiBot
         /// </summary>
         bool ResetPlotOnShow = false;
 
+        /// <summary>
+        /// 各プレイヤーの秘密保持情報など
+        /// </summary>
+        List<UserInfo> UserInfos = new List<UserInfo>();
+
         public void Start()
         {
             var token = ini.GetValue("BotSetting", "Token");
@@ -47,6 +52,11 @@ namespace SinobigamiBot
             });
             */
 
+            // Set Users
+            client.MessageReceived += (s, e) => SetUserInfos(e);
+            // Send Relation
+            client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
+
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
             // Dice Rest
@@ -65,6 +75,36 @@ namespace SinobigamiBot
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
 
+
+        /// <summary>
+        /// 最初にユーザーを全部リストに入れる
+        /// </summary>
+        /// <param name="e"></param>
+        private void SetUserInfos(MessageEventArgs e)
+        {
+            if (UserInfos.Count > 0) return;
+            foreach (var user in e.Channel.Users)
+            {
+                // TODO: botとGMを省く
+                UserInfos.Add(new UserInfo(user));
+            }
+        }
+
+        /// <summary>
+        /// 関係の図を作成して貼る
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task ShowRelationGraph(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var regex = new Regex(@"^関係.*表示");
+            if (regex.IsMatch(e.Message.Text))
+            {
+                MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
+                await e.Channel.SendFile("./relation.png");
+            }
+        }
 
         /// <summary>
         /// プロット値の設定
@@ -181,7 +221,7 @@ namespace SinobigamiBot
             var regex = new Regex(@"プロット.*表示");
             if (regex.IsMatch(e.Message.Text))
             {
-                MakeGraph.Make(ResharpPlot(), "./plot.png");
+                MakeGraph.MakePlotGraph(ResharpPlot(), "./plot.png");
                 if (ResetPlotOnShow)
                     ResetPlot();
                 await e.Channel.SendFile("./plot.png");
