@@ -18,8 +18,7 @@ namespace SinobigamiBot
 
         public System.Drawing.Point Point { get; set; }
 
-        // 文字に掛からない上下左右の点
-        public List<System.Drawing.Point> Points { get; set; } = new List<System.Drawing.Point>();
+        public System.Drawing.SizeF StringSize { get; set; }
 
         public UserInfo(User user)
         {
@@ -38,30 +37,6 @@ namespace SinobigamiBot
                 Emotions[target] = emotion;
             else
                 Emotions.Add(target, emotion);
-        }
-
-        public System.Drawing.Point GetNearPoint(System.Drawing.Point p)
-        {
-            double? min = null;
-            System.Drawing.Point? minP = null;
-            foreach (var pp in Points)
-            {
-                if (min == null)
-                {
-                    min = Distance(p, pp);
-                    minP = pp;
-                }
-                else
-                {
-                    var dis = Distance(p, pp);
-                    if (min > dis)
-                    {
-                        min = dis;
-                        minP = pp;
-                    }
-                }
-            }
-            return (System.Drawing.Point)minP;
         }
 
         private double Distance(System.Drawing.Point p1, System.Drawing.Point p2)

@@ -54,14 +54,10 @@ namespace SinobigamiBot
 
                 var name = u.User.Nickname != null ? u.User.Nickname : users[i].User.Name;
                 var size = g.MeasureString(name, font);
+                u.StringSize = size;
                 double PiI = Math.PI * (i + 1);
                 int x = (int)Math.Round(r * Math.Cos(2 * PiI / n - Math.PI / 2)) + r + (int)(size.Width / 2);
                 int y = (int)Math.Round(r * Math.Sin(2 * PiI / n - Math.PI / 2)) + r + (int)(size.Height / 2);
-
-                u.Points.Add(new Point(x, (int)(y - size.Height / 2)));
-                u.Points.Add(new Point(x, (int)(y + size.Height / 2)));
-                u.Points.Add(new Point((int)(x - size.Width / 2), y));
-                u.Points.Add(new Point((int)(x + size.Width / 2), y));
 
                 var discordColor = new Discord.Color(0, 0, 0);
                 if (u.User.Roles != null && u.User.Roles.Count() > 0)
@@ -106,10 +102,9 @@ namespace SinobigamiBot
                             startColor = System.Drawing.Color.Blue;
                     }
 
-                    // 始点・終点
-                    var startPoint = u.GetNearPoint(new Point(r, r));
-                    var endPoint = target.GetNearPoint(new Point(r, r));
-
+                    // 始点終点
+                    Point startPoint = new Point(u.Point.X + (int)(u.StringSize.Width / 2), u.Point.Y + (int)(u.StringSize.Height / 2));
+                    Point endPoint = new Point(target.Point.X + (int)(target.StringSize.Width / 2), target.Point.Y + (int)(target.StringSize.Height / 2));
                     // 中点
                     Point middle = new Point((startPoint.X + endPoint.X) / 2, (startPoint.Y + endPoint.Y) / 2);
 
