@@ -13,10 +13,6 @@ namespace SinobigamiBot
         /// </summary>
         EmotionChoice,
         /// <summary>
-        /// 感情を取得した場合それをなかったことに
-        /// </summary>
-        GetEmotion,
-        /// <summary>
         /// プロットを決めた場合なかったことに
         /// </summary>
         SetPlot,

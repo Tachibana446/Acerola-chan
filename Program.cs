@@ -33,6 +33,10 @@ namespace SinobigamiBot
         /// 各プレイヤーの秘密保持情報など
         /// </summary>
         List<UserInfo> UserInfos = new List<UserInfo>();
+        /// <summary>
+        /// 初期化が済んだかどうか
+        /// </summary>
+        bool completedInitialize = false;
 
         public void Start()
         {
@@ -56,7 +60,7 @@ namespace SinobigamiBot
             */
 
             // Set Users
-            client.MessageReceived += (s, e) => SetUserInfos(e);
+            client.MessageReceived += (s, e) => Initialize(e);
             // Send Relation
             client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
             // Show Choices Emotion
@@ -80,6 +84,9 @@ namespace SinobigamiBot
             // Show Plot
             client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
+            // キャンセル
+            client.MessageReceived += async (s, e) => await CancelOparation(e);
+
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
@@ -90,19 +97,23 @@ namespace SinobigamiBot
         /// 保存ファイルがあればそちらを読み込む
         /// </summary>
         /// <param name="e"></param>
-        private void SetUserInfos(MessageEventArgs e)
+        private void Initialize(MessageEventArgs e)
         {
-            if (UserInfos.Count > 0) return;
-            if (ExistsUserInfoFile(e.Server))
+            if (completedInitialize)
+                return;
+            if (UserInfos.Count == 0)
             {
-                UserInfos = LoadUserInfo(e);
-            }
-            else
-            {
-                foreach (var user in e.Server.Users)
+                if (ExistsUserInfoFile(e.Server))
                 {
-                    // TODO: botとGMを省く
-                    UserInfos.Add(new UserInfo(user));
+                    UserInfos = LoadUserInfo(e);
+                }
+                else
+                {
+                    foreach (var user in e.Server.Users)
+                    {
+                        // TODO: botとGMを省く
+                        UserInfos.Add(new UserInfo(user));
+                    }
                 }
             }
             // LastOperationの待機
@@ -110,6 +121,42 @@ namespace SinobigamiBot
             {
                 LastOperations.Add(i.User, Operation.None);
             }
+
+            completedInitialize = true;
+        }
+
+        /// <summary>
+        /// キャンセルと言われたときのいろいろなキャンセル処理
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task CancelOparation(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe())
+                return;
+            if (!Regex.IsMatch(e.Message.Text, @"キャンセル|cancel"))
+                return;
+            var message = "";
+            switch (LastOperations[e.User])
+            {
+                case Operation.EmotionChoice:
+                    setEmotionTemp.Remove(e.User);
+                    message = "感情選択をキャンセルしました";
+                    break;
+                case Operation.SetPlot:
+                    Plots.Remove(e.User);
+                    message = "プロットを消去しました";
+                    break;
+                case Operation.ResetPlot:
+                    Plots = OldPlots.Last();
+                    message = "プロットを1つ前の状態に戻しました";
+                    break;
+                default:
+                    message = "キャンセルする操作をしていません";
+                    break;
+            }
+            await e.Channel.SendMessage(e.User.Mention + " " + message);
+            LastOperations[e.User] = Operation.None;
         }
 
         /// <summary>
@@ -160,8 +207,8 @@ namespace SinobigamiBot
                     {
                         setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser, choice));
                     }
-                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得しますか(プラスかマイナスかで返信）");
                     LastOperations[e.User] = Operation.EmotionChoice;
+                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得しますか(プラスかマイナスかで回答）");
                 }
                 else
                 {
@@ -199,6 +246,7 @@ namespace SinobigamiBot
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得ました");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
             SaveUserInfo(e.Server);         // 保存
+            LastOperations[e.User] = Operation.None;
         }
 
         private bool isGM(User user)
@@ -220,11 +268,12 @@ namespace SinobigamiBot
         {
             if (e.Message.IsAuthor) return;
             var regex = new Regex(@"^関係表示");
-            if (regex.IsMatch(e.Message.Text))
-            {
-                MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
-                await e.Channel.SendFile("./relation.png");
-            }
+            if (!regex.IsMatch(e.Message.Text)) return;
+
+            MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
+            await e.Channel.SendFile("./relation.png");
+
+            LastOperations[e.User] = Operation.None;
         }
 
         private async Task ShowEmotionList(MessageEventArgs e)
@@ -244,6 +293,7 @@ namespace SinobigamiBot
                 if (message == "")
                     message = "誰にも感情を抱いていません";
                 await e.Channel.SendMessage(e.User.Mention + " " + message);
+                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -300,6 +350,7 @@ namespace SinobigamiBot
                 Plots[e.User] = plots;
             }
             await e.Channel.SendMessage(e.User.Mention + " 了解\n" + $"未入力：{GetNotYetEnterUsersString(e.Server)}");
+            LastOperations[e.User] = Operation.SetPlot;
         }
 
         /// <summary>
@@ -333,6 +384,7 @@ namespace SinobigamiBot
                 }
                 Plots[e.User] = new int[] { plot }.ToList();
                 await e.Channel.SendMessage(e.User.Mention + " 了解");
+                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -349,6 +401,7 @@ namespace SinobigamiBot
             {
                 ResetPlot();
                 await e.Channel.SendMessage("プロット値をリセットしました");
+                LastOperations[e.User] = Operation.ResetPlot;
             }
         }
         /// <summary>
@@ -364,7 +417,12 @@ namespace SinobigamiBot
             {
                 MakeGraph.MakePlotGraph(ResharpPlot(), "./plot.png");
                 if (ResetPlotOnShow)
+                {
                     ResetPlot();
+                    LastOperations[e.User] = Operation.ResetPlot;
+                }
+                else
+                    LastOperations[e.User] = Operation.None;
                 await e.Channel.SendFile("./plot.png");
             }
         }
@@ -381,6 +439,7 @@ namespace SinobigamiBot
             {
                 random = new Random();
                 await e.Channel.SendMessage("まそっぷ！");
+                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -418,6 +477,7 @@ namespace SinobigamiBot
             var sum = res.Sum();
             string result = "(" + string.Join(",", res.Select(a => a.ToString())) + ")= " + sum.ToString();
             await e.Channel.SendMessage(e.User.Mention + " " + result);
+            LastOperations[e.User] = Operation.None;
             return;
         }
 
