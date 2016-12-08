@@ -99,7 +99,7 @@ namespace SinobigamiBot
             }
             else
             {
-                foreach (var user in e.Channel.Users)
+                foreach (var user in e.Server.Users)
                 {
                     // TODO: botとGMを省く
                     UserInfos.Add(new UserInfo(user));
@@ -136,9 +136,9 @@ namespace SinobigamiBot
                 var reg = new Regex(target);
                 if (target != "")
                 {
-                    var notGMandBOTusers = e.Channel.Users.ToList().FindAll(x => !x.IsBot).FindAll(y => !isGM(y));
+                    var notGMandBOTusers = e.Server.Users.ToList().FindAll(x => !x.IsBot).FindAll(y => !isGM(y));
                     // DEBUG
-                    notGMandBOTusers = e.Channel.Users.ToList();
+                    notGMandBOTusers = e.Server.Users.ToList();
                     foreach (var u in notGMandBOTusers)
                     {
                         if (reg.IsMatch(u.Name) || (u.Nickname != null && reg.IsMatch(u.Nickname)))
@@ -177,9 +177,9 @@ namespace SinobigamiBot
         /// <returns></returns>
         private async Task SelectEmotion(MessageEventArgs e)
         {
-            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
-            var regex = new Regex(@"プラス|マイナス");
-            var match = regex.Match(e.Message.Text);
+            if (e.Message.IsAuthor) return;
+            var regex = new Regex("^プラス$|^マイナス$");
+            var match = regex.Match(e.Message.Text.Trim());
 
             if (!match.Success) return;
             if (!setEmotionTemp.ContainsKey(e.User))
@@ -219,7 +219,7 @@ namespace SinobigamiBot
         private async Task ShowRelationGraph(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^関係.*表示");
+            var regex = new Regex(@"^関係表示");
             if (regex.IsMatch(e.Message.Text))
             {
                 MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
@@ -299,7 +299,7 @@ namespace SinobigamiBot
             {
                 Plots[e.User] = plots;
             }
-            await e.Channel.SendMessage(e.User.Mention + " 了解");
+            await e.Channel.SendMessage(e.User.Mention + " 了解\n" + $"未入力：{GetNotYetEnterUsersString(e.Server)}");
         }
 
         /// <summary>
@@ -425,6 +425,32 @@ namespace SinobigamiBot
         //                    Util                               //
         // ----------------------------------------------------- //
 
+
+        private string GetNotYetEnterUsersString(Server s)
+        {
+            var users = GetNotYetEnterUsers(s);
+            return string.Join(", ", users.Select(u => u.Nickname != null ? u.Nickname : u.Name));
+        }
+
+        /// <summary>
+        /// まだプロットを決めてないユーザーのリストを求める
+        /// </summary>
+        /// <param name="s"></param>
+        /// <returns></returns>
+        private List<User> GetNotYetEnterUsers(Server s)
+        {
+            var users = s.Users.Where(u => !u.IsBot && !isGM(u));
+            // DEBUG
+            users = s.Users;
+            var result = new List<User>();
+            foreach (var u in users)
+            {
+                if (!Plots.Keys.Contains(u))
+                    result.Add(u);
+            }
+            return result;
+        }
+
         /// <summary>
         /// UserInfoの保存ファイルがあるかどうか
         /// </summary>
@@ -491,7 +517,7 @@ namespace SinobigamiBot
                 {
                     case "Id":
                         ulong id = ulong.Parse(value);
-                        nowUser = e.Channel.Users.First(u => u.Id == id);
+                        nowUser = e.Server.Users.First(u => u.Id == id);
                         if (nowUser == null)
                             skipToNextUser = true;
                         break;
@@ -503,7 +529,7 @@ namespace SinobigamiBot
                         var idAndEmo = value.Split(',');
                         ulong toId = ulong.Parse(idAndEmo[0]);
                         Emotion emo = new Emotion(idAndEmo[1], Emotion.ParseEmotionType(idAndEmo[2]));
-                        User toUser = e.Channel.Users.First(u => u.Id == toId);
+                        User toUser = e.Server.Users.First(u => u.Id == toId);
                         if (toUser == null)
                             continue;
                         nowEmotions.Add(toUser, emo);
