@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Discord;
 using System.Text.RegularExpressions;
 using Discord.Commands;
+using System.Drawing;
 
 namespace SinobigamiBot
 {
@@ -21,6 +22,8 @@ namespace SinobigamiBot
 
         Dictionary<User, List<int>> Plots { get; set; } = new Dictionary<User, List<int>>();
         List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
+
+        Dictionary<User, Operation> LastOperations = new Dictionary<User, Operation>();
         /// <summary>
         /// プロットの表示時に自動的にプロットをリセットするか
         /// </summary>
@@ -92,7 +95,7 @@ namespace SinobigamiBot
             if (UserInfos.Count > 0) return;
             if (ExistsUserInfoFile(e.Server))
             {
-                LoadUserInfo(e);
+                UserInfos = LoadUserInfo(e);
             }
             else
             {
@@ -101,6 +104,11 @@ namespace SinobigamiBot
                     // TODO: botとGMを省く
                     UserInfos.Add(new UserInfo(user));
                 }
+            }
+            // LastOperationの待機
+            foreach (var i in UserInfos)
+            {
+                LastOperations.Add(i.User, Operation.None);
             }
         }
 
@@ -153,6 +161,7 @@ namespace SinobigamiBot
                         setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser, choice));
                     }
                     await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得しますか(プラスかマイナスかで返信）");
+                    LastOperations[e.User] = Operation.EmotionChoice;
                 }
                 else
                 {
@@ -186,7 +195,7 @@ namespace SinobigamiBot
             else
                 em = Emotion.MinusEmotions[index];
             var uInfo = UserInfos.First(u => u.User.Id == e.User.Id);
-            uInfo.SetEmotion(setEmotionTemp[e.User].Item1, em);
+            uInfo.AddEmotion(setEmotionTemp[e.User].Item1, em);
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得ました");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
             SaveUserInfo(e.Server);         // 保存
@@ -435,68 +444,75 @@ namespace SinobigamiBot
             foreach (var user in UserInfos)
             {
                 sw.WriteLine("[User]");
-                sw.WriteLine(user.User.Id);
-                sw.WriteLine($"{user.Point.X},{user.Point.Y}");
-                foreach (var emo in user.Emotions)
+                sw.WriteLine($"Name={user.User.Name}");
+                sw.WriteLine($"Id={user.User.Id}");
+                sw.WriteLine($"X={user.Point.X}");
+                sw.WriteLine($"Y={user.Point.Y}");
+                foreach (var userAndEmo in user.Emotions)
                 {
-                    sw.WriteLine(emo.Key.Id + "," + emo.Value.ToString());
+                    sw.WriteLine($"Emotion={userAndEmo.Key.Id},{userAndEmo.Value.ToString()}");
                 }
                 sw.WriteLine("[UserEnd]");
             }
+
             sw.Close();
         }
 
-        private void LoadUserInfo(MessageEventArgs e)
+        private List<UserInfo> LoadUserInfo(MessageEventArgs e)
         {
+            var result = new List<UserInfo>();
             var lines = System.IO.File.ReadLines($"./{e.Server.Id}.txt");
             User nowUser = null;
-            System.Drawing.Point nowPoint = new System.Drawing.Point(0, 0);
+            Point nowPoint = new Point(0, 0);
             var nowEmotions = new Dictionary<User, Emotion>();
-            // 1:UserId 2:Point 3:Emotions 4:SkipToNextUser
-            int phase = 0;
 
+            bool skipToNextUser = false;
             foreach (var line in lines)
             {
-                // Userの区切りなら現在の値を代入してリセット
-                if (line.Trim() == "[UserEnd]")
-                {
-                    UserInfos.Add(new UserInfo(nowUser, nowEmotions));
-                    continue;
-                }
                 if (line.Trim() == "[User]")
                 {
-                    phase = 1;
-                    nowPoint = new System.Drawing.Point(0, 0);
+                    nowPoint = new Point(0, 0);
                     nowEmotions = new Dictionary<User, Emotion>();
+                    nowUser = null;
+                    skipToNextUser = false;
                     continue;
                 }
-                switch (phase)
+                if (skipToNextUser)
+                    continue;
+                if (line.Trim() == "[UserEnd]")
                 {
-                    case 1:
-                        ulong id = ulong.Parse(line);
+                    if (nowUser == null) continue;
+                    result.Add(new UserInfo(nowUser, nowEmotions));
+                    continue;
+                }
+
+                string key = line.Split('=')[0], value = line.Split('=')[1];
+                switch (key)
+                {
+                    case "Id":
+                        ulong id = ulong.Parse(value);
                         nowUser = e.Channel.Users.First(u => u.Id == id);
-                        if (nowUser == null) phase = 4;
-                        else phase = 2;
+                        if (nowUser == null)
+                            skipToNextUser = true;
                         break;
-                    case 2:
-                        var points = line.Split(',').Select(a => int.Parse(a));
-                        nowPoint = new System.Drawing.Point(points.ElementAt(0), points.ElementAt(1));
-                        phase = 3;
+                    case "XY":
+                        var xy = value.Split(',').Select(a => int.Parse(a)).ToArray();
+                        nowPoint = new Point(xy[0], xy[1]);
                         break;
-                    case 3:
-                        var str = line.Split(',');
-                        Emotion emo = new Emotion(str[1], Emotion.ParseEmotionType(str[2]));
-                        ulong toId = ulong.Parse(str[0]);
+                    case "Emotion":
+                        var idAndEmo = value.Split(',');
+                        ulong toId = ulong.Parse(idAndEmo[0]);
+                        Emotion emo = new Emotion(idAndEmo[1], Emotion.ParseEmotionType(idAndEmo[2]));
                         User toUser = e.Channel.Users.First(u => u.Id == toId);
-                        if (toUser == null) continue;
+                        if (toUser == null)
+                            continue;
                         nowEmotions.Add(toUser, emo);
                         break;
-                    case 4:
-                        continue;
                     default:
                         break;
                 }
             }
+            return result;
         }
 
         /// <summary>

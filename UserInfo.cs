@@ -14,7 +14,8 @@ namespace SinobigamiBot
         /// ユーザーに対して抱いている感情
         /// </summary>
         public Dictionary<User, Emotion> Emotions { get; private set; } = new Dictionary<User, Emotion>();
-        // TODO: 持っている秘密など
+        // 持っている秘密
+        public List<Secret> Secrets { get; private set; } = new List<Secret>();
 
         public System.Drawing.Point Point { get; set; }
 
@@ -31,12 +32,32 @@ namespace SinobigamiBot
             Emotions = emotions;
         }
 
-        public void SetEmotion(User target, Emotion emotion)
+        public UserInfo(User user, Dictionary<User, Emotion> emotions, List<Secret> secrets)
+        {
+            User = user;
+            Emotions = emotions;
+            Secrets = secrets;
+        }
+
+        public void AddEmotion(User target, Emotion emotion)
         {
             if (Emotions.ContainsKey(target))
                 Emotions[target] = emotion;
             else
                 Emotions.Add(target, emotion);
+        }
+
+        public void AddSecret(User target)
+        {
+            if (Secrets.Any(u => u.UserId == target.Id))
+                return;
+            else
+                Secrets.Add(new Secret(target));
+        }
+
+        public void AddPrizeSecret(string name)
+        {
+            Secrets.Add(new Secret(name));
         }
 
         private double Distance(System.Drawing.Point p1, System.Drawing.Point p2)
