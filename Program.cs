@@ -70,6 +70,9 @@ namespace SinobigamiBot
             // Show Emotions List
             client.MessageReceived += async (s, e) => await ShowEmotionList(e);
 
+            // ユーザーの秘密
+            client.MessageReceived += async (s, e) => await SetUserSecret(e);
+
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
             // Dice Rest
@@ -173,7 +176,7 @@ namespace SinobigamiBot
         private async Task SetEmotion(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^感情.*取得(.*)");
+            var regex = new Regex(@"^感情取得(.*)");
             var match = regex.Match(e.Message.Text);
             if (match.Success)
             {
@@ -275,7 +278,11 @@ namespace SinobigamiBot
 
             LastOperations[e.User] = Operation.None;
         }
-
+        /// <summary>
+        /// 抱いているを羅列する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
         private async Task ShowEmotionList(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
@@ -295,6 +302,39 @@ namespace SinobigamiBot
                 await e.Channel.SendMessage(e.User.Mention + " " + message);
                 LastOperations[e.User] = Operation.None;
             }
+        }
+
+        /// <summary>
+        /// ユーザーの秘密を取得する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetUserSecret(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = ToNarrow(e.Message.Text);
+            var regex = new Regex(@"^ユーザー.*秘密取得(.*)");
+            var match = regex.Match(text);
+            if (!match.Success) return;
+            var arg = match.Groups[1].Value.Trim();
+            if (arg == "")
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 対象のユーザー名を引数に与えてください");
+                return;
+            }
+            var user = GetMatchUser(e, arg);
+            // DEBUG
+            user = GetMatchUser(e, arg, true, true);
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {arg}にマッチするユーザーはいません");
+                return;
+            }
+            var uinfo = UserInfos.Find(a => a.User == e.User);
+            uinfo.AddSecret(user);
+            string aName = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
+            string bName = user.Nickname != null ? user.Nickname : user.Name;
+            await e.Channel.SendMessage($"{aName}は{bName}の秘密を手に入れた！");
         }
 
         /// <summary>
@@ -486,6 +526,36 @@ namespace SinobigamiBot
         // ----------------------------------------------------- //
 
 
+        /// <summary>
+        /// サーバー内のパターンに一致する名前のユーザーを返す
+        /// </summary>
+        /// <param name="server"></param>
+        /// <param name="pattern"></param>
+        /// <param name="includeGM"></param>
+        /// <param name="includeBOT"></param>
+        /// <returns></returns>
+        private User GetMatchUser(MessageEventArgs e, string pattern, bool includeGM = false, bool includeBOT = false, bool includeSelf = false)
+        {
+            var server = e.Server;
+            var users = server.Users.ToList();
+            if (!includeGM) users = users.FindAll(u => !isGM(u));
+            if (!includeBOT) users = users.FindAll(u => !u.IsBot);
+            if (!includeSelf) users.Remove(e.User);
+            foreach (var user in users)
+            {
+                if (user.Nickname != null && Regex.IsMatch(user.Nickname, pattern))
+                    return user;
+                if (Regex.IsMatch(user.Name, pattern))
+                    return user;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// まだプロットを決めていないユーザーの一覧を文字列にして返す
+        /// </summary>
+        /// <param name="s"></param>
+        /// <returns></returns>
         private string GetNotYetEnterUsersString(Server s)
         {
             var users = GetNotYetEnterUsers(s);
@@ -691,8 +761,8 @@ namespace SinobigamiBot
         /// <returns></returns>
         public static string ToNarrow(string input)
         {
-            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ";
-            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            var wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ";
+            var narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
             string output = "";
             foreach (var c in input)
