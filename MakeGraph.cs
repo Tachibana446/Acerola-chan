@@ -38,13 +38,15 @@ namespace SinobigamiBot
         {
             int fontSize = 15;
             Font font = new Font("メイリオ", fontSize);
+            Font smallFont = new Font("メイリオ", fontSize - 3);
 
             int r = 150;
-            var img = new Bitmap(r * 2 + 200, r * 2 + 100);
+            var img = new Bitmap(r * 2 + 400, r * 2 + 100);
             var g = Graphics.FromImage(img);
             g.FillRectangle(Brushes.White, g.VisibleClipBounds);
 
             var drawNames = new List<DrawStringData>();
+            var drawSecrets = new List<DrawStringData>();
 
             int n = users.Count();
             // x, yを取得
@@ -65,12 +67,30 @@ namespace SinobigamiBot
 
                 var color = System.Drawing.Color.FromArgb(discordColor.R, discordColor.G, discordColor.B);
 
-                drawNames.Add(new DrawStringData { Text = name, Point = new Point(x, y), Color = color });
+                var drawNameData = new DrawStringData(name, new Point(x, y), color, font);
+                drawNames.Add(drawNameData);
 
 
                 int tx = (int)(x - (size.Width / 2));
                 int ty = (int)(y - (size.Height / 2));
                 u.Point = new Point(tx, ty);
+
+                // 秘密
+                Point secretP = new Point(u.Point.X, (int)(u.Point.Y + drawNameData.GetDrawSize(g).Height + 3));
+                bool firstSecret = true;
+                foreach (var sec in u.Secrets)
+                {
+                    if (firstSecret)
+                    {
+                        var drawData = new DrawStringData("秘密:", secretP, System.Drawing.Color.Black, smallFont);
+                        secretP.X += (int)(drawData.GetDrawSize(g).Width);
+                        drawSecrets.Add(drawData);
+                        firstSecret = false;
+                    }
+                    var drawSecretData = new DrawStringData(sec.Name, secretP, sec.Color, smallFont);
+                    secretP.X += (int)(drawSecretData.GetDrawSize(g).Width);
+                    drawSecrets.Add(drawSecretData);
+                }
             }
             // ------------ 線描画 -----------------------
             var drawn = new List<Tuple<UserInfo, UserInfo>>();  // 描画済みペア
@@ -123,13 +143,13 @@ namespace SinobigamiBot
             // ---------------- ユーザー名描画 ----------------------------
             foreach (var data in drawNames)
             {
-                var brush = new SolidBrush(data.Color);
-                var boldFont = new Font(font, FontStyle.Bold);
-                g.DrawString(data.Text, boldFont, Brushes.White, data.Point);
-                g.DrawString(data.Text, font, brush, data.Point);
+                data.Draw(g);
             }
             // --------------- TODO:秘密など描画 -------------------------
-
+            foreach (var data in drawSecrets)
+            {
+                data.Draw(g);
+            }
 
             img.Save(path, System.Drawing.Imaging.ImageFormat.Png);
 
@@ -143,5 +163,28 @@ namespace SinobigamiBot
         public string Text { get; set; }
         public Point Point { get; set; }
         public System.Drawing.Color Color { get; set; }
+        public Font Font { get; set; }
+
+        public DrawStringData(string text, Point p, System.Drawing.Color color, Font f)
+        {
+            Text = text;
+            Point = p;
+            Color = color;
+            Font = f;
+        }
+
+        public SizeF GetDrawSize(Graphics g)
+        {
+            return g.MeasureString(Text, Font);
+        }
+
+        public void Draw(Graphics g)
+        {
+            var brush = new SolidBrush(Color);
+            var boldFont = new Font(Font, FontStyle.Bold);
+            g.DrawString(Text, boldFont, Brushes.White, Point);
+            g.DrawString(Text, Font, brush, Point);
+            brush.Dispose();
+        }
     }
 }

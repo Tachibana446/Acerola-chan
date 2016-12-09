@@ -72,6 +72,8 @@ namespace SinobigamiBot
 
             // ユーザーの秘密
             client.MessageReceived += async (s, e) => await SetUserSecret(e);
+            // 秘密一覧
+            client.MessageReceived += async (s, e) => await ShowSecrets(e);
 
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
@@ -286,7 +288,7 @@ namespace SinobigamiBot
         private async Task ShowEmotionList(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^感情リスト");
+            var regex = new Regex(@"^感情一覧");
             if (regex.IsMatch(e.Message.Text))
             {
                 var info = UserInfos.Find(i => i.User.Id == e.User.Id);
@@ -335,8 +337,14 @@ namespace SinobigamiBot
             string aName = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
             string bName = user.Nickname != null ? user.Nickname : user.Name;
             await e.Channel.SendMessage($"{aName}は{bName}の秘密を手に入れた！");
+            SaveUserInfo(e.Server);
         }
 
+        /// <summary>
+        /// 秘密の一覧を表示
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
         private async Task ShowSecrets(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
@@ -626,6 +634,10 @@ namespace SinobigamiBot
                 {
                     sw.WriteLine($"Emotion={userAndEmo.Key.Id},{userAndEmo.Value.ToString()}");
                 }
+                foreach (var secrets in user.Secrets)
+                {
+                    sw.WriteLine($"Secret={secrets.ToCSV()}");
+                }
                 sw.WriteLine("[UserEnd]");
             }
 
@@ -639,6 +651,7 @@ namespace SinobigamiBot
             User nowUser = null;
             Point nowPoint = new Point(0, 0);
             var nowEmotions = new Dictionary<User, Emotion>();
+            var nowSecrets = new List<Secret>();
 
             bool skipToNextUser = false;
             foreach (var line in lines)
@@ -647,6 +660,7 @@ namespace SinobigamiBot
                 {
                     nowPoint = new Point(0, 0);
                     nowEmotions = new Dictionary<User, Emotion>();
+                    nowSecrets = new List<Secret>();
                     nowUser = null;
                     skipToNextUser = false;
                     continue;
@@ -656,7 +670,7 @@ namespace SinobigamiBot
                 if (line.Trim() == "[UserEnd]")
                 {
                     if (nowUser == null) continue;
-                    result.Add(new UserInfo(nowUser, nowEmotions));
+                    result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets));
                     continue;
                 }
 
@@ -681,6 +695,9 @@ namespace SinobigamiBot
                         if (toUser == null)
                             continue;
                         nowEmotions.Add(toUser, emo);
+                        break;
+                    case "Secret":
+                        nowSecrets.Add(Secret.FromCSV(value));
                         break;
                     default:
                         break;
