@@ -39,6 +39,11 @@ namespace SinobigamiBot
             Secrets = secrets;
         }
 
+        public string NameOrNick()
+        {
+            return User.Nickname != null ? User.Nickname : User.Name;
+        }
+
         public void AddEmotion(User target, Emotion emotion)
         {
             if (Emotions.ContainsKey(target))

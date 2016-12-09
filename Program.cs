@@ -211,11 +211,11 @@ namespace SinobigamiBot
                         setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser, choice));
                     }
                     LastOperations[e.User] = Operation.EmotionChoice;
-                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得しますか(プラスかマイナスかで回答）");
+                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
                 }
                 else
                 {
-                    await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてください");
+                    await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてね(｡☌ᴗ☌｡)");
                 }
             }
         }
@@ -234,7 +234,7 @@ namespace SinobigamiBot
             if (!match.Success) return;
             if (!setEmotionTemp.ContainsKey(e.User))
             {
-                await e.Channel.SendMessage(e.User.Mention + " まずは「感情取得」で感情の選択肢を表示させてください");
+                await e.Channel.SendMessage(e.User.Mention + " まずは「感情取得」で感情の選択肢を表示させてね？(◍•ᴗ•◍)");
                 return;
             }
             int index = Emotion.EmotionList.IndexOf(setEmotionTemp[e.User].Item2);
@@ -246,7 +246,7 @@ namespace SinobigamiBot
                 em = Emotion.MinusEmotions[index];
             var uInfo = UserInfos.First(u => u.User.Id == e.User.Id);
             uInfo.AddEmotion(setEmotionTemp[e.User].Item1, em);
-            await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得ました");
+            await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得たよ！(๑˃̵ᴗ˂̵)و");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
             SaveUserInfo(e.Server);         // 保存
             LastOperations[e.User] = Operation.None;
@@ -279,7 +279,7 @@ namespace SinobigamiBot
             LastOperations[e.User] = Operation.None;
         }
         /// <summary>
-        /// 抱いているを羅列する
+        /// 抱いている感情を羅列する
         /// </summary>
         /// <param name="e"></param>
         /// <returns></returns>
@@ -298,7 +298,7 @@ namespace SinobigamiBot
                     message += $"\n- {name}\t: {emo.Value.Name}";
                 }
                 if (message == "")
-                    message = "誰にも感情を抱いていません";
+                    message = "誰にも感情を抱いていないよ？";
                 await e.Channel.SendMessage(e.User.Mention + " " + message);
                 LastOperations[e.User] = Operation.None;
             }
@@ -319,7 +319,7 @@ namespace SinobigamiBot
             var arg = match.Groups[1].Value.Trim();
             if (arg == "")
             {
-                await e.Channel.SendMessage(e.User.Mention + " 対象のユーザー名を引数に与えてください");
+                await e.Channel.SendMessage(e.User.Mention + " 対象のユーザー名を引数に与えてね。٩(๑´0`๑)۶");
                 return;
             }
             var user = GetMatchUser(e, arg);
@@ -327,7 +327,7 @@ namespace SinobigamiBot
             user = GetMatchUser(e, arg, true, true);
             if (user == null)
             {
-                await e.Channel.SendMessage(e.User.Mention + $" {arg}にマッチするユーザーはいません");
+                await e.Channel.SendMessage(e.User.Mention + $" {arg}にマッチするユーザーはいないよ？");
                 return;
             }
             var uinfo = UserInfos.Find(a => a.User == e.User);
@@ -335,6 +335,24 @@ namespace SinobigamiBot
             string aName = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
             string bName = user.Nickname != null ? user.Nickname : user.Name;
             await e.Channel.SendMessage($"{aName}は{bName}の秘密を手に入れた！");
+        }
+
+        private async Task ShowSecrets(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            if (!Regex.IsMatch(e.Message.Text, @"秘密一覧")) return;
+            var user = UserInfos.Find(u => u.User.Id == e.User.Id);
+
+            var username = user.NameOrNick();
+            var text = "";
+            foreach (var secret in user.Secrets)
+            {
+                if (text == "") text += $"{username}の持っている秘密\n";
+                text += $"{secret.Name} の秘密\n";
+            }
+            if (text == "") text = "秘密を一つも持っていないよ？";
+
+            await e.Channel.SendMessage(text);
         }
 
         /// <summary>
@@ -360,7 +378,7 @@ namespace SinobigamiBot
 
                 if (plot1 < 1 || plot1 > 6 || plot2 < 1 || plot2 > 6)
                 {
-                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6です");
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6だよ");
                     return;
                 }
                 plots.Add(plot1);
@@ -372,7 +390,7 @@ namespace SinobigamiBot
                 int plot = int.Parse(match.Groups[2].Value);
                 if (plot < 1 || plot > 6)
                 {
-                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6です");
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は1～6だよ");
                     return;
                 }
                 plots.Add(plot);
@@ -389,7 +407,7 @@ namespace SinobigamiBot
             {
                 Plots[e.User] = plots;
             }
-            await e.Channel.SendMessage(e.User.Mention + " 了解\n" + $"未入力：{GetNotYetEnterUsersString(e.Server)}");
+            await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + $"未入力：{GetNotYetEnterUsersString(e.Server)}");
             LastOperations[e.User] = Operation.SetPlot;
         }
 
@@ -409,7 +427,7 @@ namespace SinobigamiBot
                 int plot = int.Parse(match.Groups[2].Value);
                 if (plot < 1 || plot > 6)
                 {
-                    await e.Channel.SendMessage(e.User.Mention + " プロット値は１～６です");
+                    await e.Channel.SendMessage(e.User.Mention + " プロット値は１～６だよ");
                     return;
                 }
                 // Plotsが空なら一つ前の物を
@@ -417,13 +435,13 @@ namespace SinobigamiBot
                 {
                     if (OldPlots.Count == 0)
                     {
-                        await e.Channel.SendMessage(e.User.Mention + " まずはsetで普通にプロット値を決めてください");
+                        await e.Channel.SendMessage(e.User.Mention + " まずはsetで普通にプロット値を決めてね");
                         return;
                     }
                     Plots = OldPlots.Last();
                 }
                 Plots[e.User] = new int[] { plot }.ToList();
-                await e.Channel.SendMessage(e.User.Mention + " 了解");
+                await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و");
                 LastOperations[e.User] = Operation.None;
             }
         }
@@ -440,7 +458,7 @@ namespace SinobigamiBot
             if (regex.IsMatch(e.Message.Text))
             {
                 ResetPlot();
-                await e.Channel.SendMessage("プロット値をリセットしました");
+                await e.Channel.SendMessage("プロット値をリセットしたよ");
                 LastOperations[e.User] = Operation.ResetPlot;
             }
         }
@@ -504,7 +522,7 @@ namespace SinobigamiBot
 
             if (n > 300 || m > 300)
             {
-                await e.Channel.SendMessage(e.User.Mention + " 数が大きすぎます");
+                await e.Channel.SendMessage(e.User.Mention + " そんなにたくさんはできないよ？(｡･ˇ_ˇ･｡)");
                 return;
             }
 
