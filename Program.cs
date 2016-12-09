@@ -72,6 +72,8 @@ namespace SinobigamiBot
 
             // ユーザーの秘密
             client.MessageReceived += async (s, e) => await SetUserSecret(e);
+            // その他の秘密取得
+            client.MessageReceived += async (s, e) => await SetOtherSecret(e);
             // 秘密一覧
             client.MessageReceived += async (s, e) => await ShowSecrets(e);
 
@@ -183,25 +185,16 @@ namespace SinobigamiBot
             if (match.Success)
             {
                 var target = match.Groups[1].Value.Replace('　', ' ').Trim();
-                bool enableTarget = false;
-                User targetUser = null;
-                var reg = new Regex(target);
-                if (target != "")
+                if (target == "")
                 {
-                    var notGMandBOTusers = e.Server.Users.ToList().FindAll(x => !x.IsBot).FindAll(y => !isGM(y));
-                    // DEBUG
-                    notGMandBOTusers = e.Server.Users.ToList();
-                    foreach (var u in notGMandBOTusers)
-                    {
-                        if (reg.IsMatch(u.Name) || (u.Nickname != null && reg.IsMatch(u.Nickname)))
-                        {
-                            enableTarget = true;
-                            targetUser = u;
-                            break;
-                        }
-                    }
+                    await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてね(｡☌ᴗ☌｡)");
+                    return;
                 }
-                if (enableTarget)
+                User targetUser = GetMatchUser(e, target);
+                // DEBUG
+                targetUser = GetMatchUser(e, target, false, true);
+
+                if (targetUser != null)
                 {
                     var choice = Emotion.RandomChoice();
                     if (setEmotionTemp.ContainsKey(e.User))
@@ -214,10 +207,12 @@ namespace SinobigamiBot
                     }
                     LastOperations[e.User] = Operation.EmotionChoice;
                     await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
+                    return;
                 }
                 else
                 {
-                    await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてね(｡☌ᴗ☌｡)");
+                    await e.Channel.SendMessage(e.User.Mention + $" {target}にマッチするユーザーはいないよ");
+                    return;
                 }
             }
         }
@@ -337,6 +332,26 @@ namespace SinobigamiBot
             string aName = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
             string bName = user.Nickname != null ? user.Nickname : user.Name;
             await e.Channel.SendMessage($"{aName}は{bName}の秘密を手に入れた！");
+            SaveUserInfo(e.Server);
+        }
+
+        private async Task SetOtherSecret(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = ToNarrow(e.Message.Text);
+            var regex = new Regex(@"^その他.*秘密取得(.*)");
+            var match = regex.Match(text);
+            if (!match.Success) return;
+            var arg = match.Groups[1].Value.Trim();
+            if (arg == "")
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 秘密を引数として与えてね");
+                return;
+            }
+            var uinfo = UserInfos.Find(a => a.User.Id == e.User.Id);
+            uinfo.AddSecret(arg);
+            var name = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
+            await e.Channel.SendMessage($"{name}は{arg}の秘密を手に入れた！");
             SaveUserInfo(e.Server);
         }
 

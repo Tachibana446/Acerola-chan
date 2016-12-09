@@ -41,7 +41,7 @@ namespace SinobigamiBot
             Font smallFont = new Font("メイリオ", fontSize - 3);
 
             int r = 150;
-            var img = new Bitmap(r * 2 + 400, r * 2 + 100);
+            var img = new Bitmap(r * 2 + 200, r * 2 + 200);
             var g = Graphics.FromImage(img);
             g.FillRectangle(Brushes.White, g.VisibleClipBounds);
 
@@ -87,8 +87,8 @@ namespace SinobigamiBot
                         drawSecrets.Add(drawData);
                         firstSecret = false;
                     }
-                    var drawSecretData = new DrawStringData(sec.Name, secretP, sec.Color, smallFont);
-                    secretP.X += (int)(drawSecretData.GetDrawSize(g).Width);
+                    var drawSecretData = new DrawStringData(sec.Name + "  ", secretP, sec.Color, smallFont);
+                    secretP.Y += (int)(drawSecretData.GetDrawSize(g).Height);
                     drawSecrets.Add(drawSecretData);
                 }
             }

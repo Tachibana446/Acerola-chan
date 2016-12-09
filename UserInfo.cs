@@ -60,6 +60,11 @@ namespace SinobigamiBot
                 Secrets.Add(new Secret(target));
         }
 
+        public void AddSecret(string name)
+        {
+            Secrets.Add(new Secret(name));
+        }
+
         public void AddPrizeSecret(string name)
         {
             Secrets.Add(new Secret(name));
