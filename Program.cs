@@ -69,7 +69,7 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await SelectEmotion(e);
             // Show Emotions List
             client.MessageReceived += async (s, e) => await ShowEmotionList(e);
-            
+
             // 秘密取得
             client.MessageReceived += async (s, e) => await SetOtherSecret(e);
             // 秘密一覧
@@ -325,14 +325,33 @@ namespace SinobigamiBot
                 return;
             }
             var uinfo = UserInfos.Find(a => a.User.Id == e.User.Id);
-            if(uinfo == null)
+            if (uinfo == null)
             {
                 await e.Channel.SendMessage($"{e.User.Mention} あなたは何かしらの理由でプレイヤーリストに載っていないので、秘密を得られません（GMやBOT等");
                 return;
             }
-            uinfo.AddSecret(arg);
-            var name = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
-            await e.Channel.SendMessage($"{name} は {arg}の秘密を 手に入れた！");
+            UserInfo target = null;
+            string targetname = arg;
+            try
+            {
+                target = GetMatchUserInfo(arg);
+            }
+            catch
+            {
+                target = null;
+            }
+            if (target != null)
+            {
+                uinfo.AddSecret(target.User);
+                targetname = target.NameOrNick();
+            }
+            else
+            {
+                uinfo.AddSecret(arg);
+            }
+            var name = uinfo.NameOrNick();
+
+            await e.Channel.SendMessage($"{name} は {targetname}の秘密を 手に入れた！");
             SaveUserInfo(e.Server);
         }
 
@@ -732,8 +751,7 @@ namespace SinobigamiBot
                 sw.WriteLine("[User]");
                 sw.WriteLine($"Name={user.User.Name}");
                 sw.WriteLine($"Id={user.User.Id}");
-                sw.WriteLine($"X={user.Point.X}");
-                sw.WriteLine($"Y={user.Point.Y}");
+                sw.WriteLine($"XY={user.Point.X},{user.Point.Y}");
                 foreach (var userAndEmo in user.Emotions)
                 {
                     sw.WriteLine($"Emotion={userAndEmo.Key.Id},{userAndEmo.Value.ToString()}");
