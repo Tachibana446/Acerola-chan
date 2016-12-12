@@ -69,10 +69,8 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await SelectEmotion(e);
             // Show Emotions List
             client.MessageReceived += async (s, e) => await ShowEmotionList(e);
-
-            // ユーザーの秘密
-            client.MessageReceived += async (s, e) => await SetUserSecret(e);
-            // その他の秘密取得
+            
+            // 秘密取得
             client.MessageReceived += async (s, e) => await SetOtherSecret(e);
             // 秘密一覧
             client.MessageReceived += async (s, e) => await ShowSecrets(e);
@@ -309,44 +307,15 @@ namespace SinobigamiBot
         }
 
         /// <summary>
-        /// ユーザーの秘密を取得する
+        /// 秘密を取得する
         /// </summary>
         /// <param name="e"></param>
         /// <returns></returns>
-        private async Task SetUserSecret(MessageEventArgs e)
-        {
-            if (e.Message.IsAuthor) return;
-            var text = ToNarrow(e.Message.Text);
-            var regex = new Regex(@"^ユーザーの秘密取得(.*)");
-            var match = regex.Match(text);
-            if (!match.Success) return;
-            var arg = match.Groups[1].Value.Trim();
-            if (arg == "")
-            {
-                await e.Channel.SendMessage(e.User.Mention + " 対象のユーザー名を引数に与えてね。٩(๑´0`๑)۶");
-                return;
-            }
-            var user = GetMatchUser(e, arg);
-            // DEBUG
-            //user = GetMatchUser(e, arg, true, true);
-            if (user == null)
-            {
-                await e.Channel.SendMessage(e.User.Mention + $" {arg}にマッチするユーザーはいないよ？");
-                return;
-            }
-            var uinfo = UserInfos.Find(a => a.User == e.User);
-            uinfo.AddSecret(user);
-            string aName = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
-            string bName = user.Nickname != null ? user.Nickname : user.Name;
-            await e.Channel.SendMessage($"{aName}は{bName}の秘密を手に入れた！");
-            SaveUserInfo(e.Server);
-        }
-
         private async Task SetOtherSecret(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
             var text = ToNarrow(e.Message.Text);
-            var regex = new Regex(@"^その他の秘密取得(.*)");
+            var regex = new Regex(@"^秘密取得(.*)");
             var match = regex.Match(text);
             if (!match.Success) return;
             var arg = match.Groups[1].Value.Trim();
@@ -356,9 +325,14 @@ namespace SinobigamiBot
                 return;
             }
             var uinfo = UserInfos.Find(a => a.User.Id == e.User.Id);
+            if(uinfo == null)
+            {
+                await e.Channel.SendMessage($"{e.User.Mention} あなたは何かしらの理由でプレイヤーリストに載っていないので、秘密を得られません（GMやBOT等");
+                return;
+            }
             uinfo.AddSecret(arg);
             var name = e.User.Nickname != null ? e.User.Nickname : e.User.Name;
-            await e.Channel.SendMessage($"{name}は{arg}の秘密を手に入れた！");
+            await e.Channel.SendMessage($"{name} は {arg}の秘密を 手に入れた！");
             SaveUserInfo(e.Server);
         }
 
