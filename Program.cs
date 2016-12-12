@@ -148,10 +148,12 @@ namespace SinobigamiBot
             }
 
             // セリフ
-            if (System.IO.File.Exists("serif.txt"))
+            if (System.IO.File.Exists("serif/serif.txt"))
             {
-                foreach (var line in System.IO.File.ReadLines("serif.txt"))
+                foreach (var line in System.IO.File.ReadLines("serif/serif.txt"))
                     Serifs.Add(line.Replace(@"\n", "\n").Trim());
+                if (System.IO.File.Exists("serif/lucky.txt"))
+                    Serifs.AddRange(System.IO.File.ReadLines("serif/lucky.txt"));
                 Serifs.RemoveAll(s => s == "");
             }
             completedInitialize = true;
@@ -667,7 +669,7 @@ namespace SinobigamiBot
             if (Serifs.Count == 0) await e.Channel.SendMessage("ふぁいる のっと ふぁうんど ！");
             else
             {
-                await e.Channel.SendMessage(Serifs.Sample());
+                await e.Channel.SendMessage(e.User.Mention + " " + Serifs.Sample());
             }
         }
 
