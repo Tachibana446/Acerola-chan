@@ -93,6 +93,8 @@ namespace SinobigamiBot
 
             // キャンセル
             client.MessageReceived += async (s, e) => await CancelOparation(e);
+            // 使い方
+            client.MessageReceived += async (s, e) => await ShowUsage(e);
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
@@ -116,7 +118,10 @@ namespace SinobigamiBot
                 }
                 else
                 {
-                    foreach (var user in e.Server.Users)
+                    var users = GetServerUsers(e.Server);
+                    // DEBUG
+                    // users = GetServerUsers(e.Server,true,true);
+                    foreach (var user in users)
                     {
                         // TODO: botとGMを省く
                         UserInfos.Add(new UserInfo(user));
@@ -192,7 +197,7 @@ namespace SinobigamiBot
                 }
                 User targetUser = GetMatchUser(e, target);
                 // DEBUG
-                targetUser = GetMatchUser(e, target, false, true);
+                //targetUser = GetMatchUser(e, target, false, true);
 
                 if (targetUser != null)
                 {
@@ -310,7 +315,7 @@ namespace SinobigamiBot
         {
             if (e.Message.IsAuthor) return;
             var text = ToNarrow(e.Message.Text);
-            var regex = new Regex(@"^ユーザー.*秘密取得(.*)");
+            var regex = new Regex(@"^ユーザーの秘密取得(.*)");
             var match = regex.Match(text);
             if (!match.Success) return;
             var arg = match.Groups[1].Value.Trim();
@@ -321,7 +326,7 @@ namespace SinobigamiBot
             }
             var user = GetMatchUser(e, arg);
             // DEBUG
-            user = GetMatchUser(e, arg, true, true);
+            //user = GetMatchUser(e, arg, true, true);
             if (user == null)
             {
                 await e.Channel.SendMessage(e.User.Mention + $" {arg}にマッチするユーザーはいないよ？");
@@ -339,7 +344,7 @@ namespace SinobigamiBot
         {
             if (e.Message.IsAuthor) return;
             var text = ToNarrow(e.Message.Text);
-            var regex = new Regex(@"^その他.*秘密取得(.*)");
+            var regex = new Regex(@"^その他の秘密取得(.*)");
             var match = regex.Match(text);
             if (!match.Success) return;
             var arg = match.Groups[1].Value.Trim();
@@ -552,7 +557,7 @@ namespace SinobigamiBot
             var res = new List<int>();
             for (int i = 0; i < n; i++)
             {
-                int r = random.Next(1, m);
+                int r = random.Next(1, m + 1);
                 res.Add(r);
             }
             var sum = res.Sum();
@@ -560,6 +565,22 @@ namespace SinobigamiBot
             await e.Channel.SendMessage(e.User.Mention + " " + result);
             LastOperations[e.User] = Operation.None;
             return;
+        }
+
+        private async Task ShowUsage(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe())
+                return;
+            if (Regex.IsMatch(e.Message.Text, @"usage|使い方"))
+            {
+                if (!System.IO.File.Exists("./usage.txt"))
+                {
+                    throw new Exception("not found usage.txt");
+                }
+                var lines = System.IO.File.ReadLines("./usage.txt");
+                var str = string.Join("\n", lines);
+                await e.Channel.SendMessage(str);
+            }
         }
 
         // ----------------------------------------------------- //
@@ -593,6 +614,23 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// サーバー内のユーザーを取得する
+        /// </summary>
+        /// <param name="s"></param>
+        /// <param name="includeGM"></param>
+        /// <param name="includeBot"></param>
+        /// <returns></returns>
+        private List<User> GetServerUsers(Server s, bool includeGM = false, bool includeBot = false)
+        {
+            var users = s.Users;
+            if (!includeGM)
+                users = users.Where(u => !isGM(u));
+            if (!includeBot)
+                users = users.Where(u => !u.IsBot);
+            return users.ToList();
+        }
+
+        /// <summary>
         /// まだプロットを決めていないユーザーの一覧を文字列にして返す
         /// </summary>
         /// <param name="s"></param>
@@ -612,7 +650,7 @@ namespace SinobigamiBot
         {
             var users = s.Users.Where(u => !u.IsBot && !isGM(u));
             // DEBUG
-            users = s.Users;
+            //users = s.Users;
             var result = new List<User>();
             foreach (var u in users)
             {
