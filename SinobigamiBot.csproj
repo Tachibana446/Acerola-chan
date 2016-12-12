@@ -84,6 +84,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Extensions.cs" />
     <Compile Include="IniFile.cs" />
     <Compile Include="MakeGraph.cs" />
     <Compile Include="Operation.cs" />

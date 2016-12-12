@@ -38,6 +38,11 @@ namespace SinobigamiBot
         /// </summary>
         bool completedInitialize = false;
 
+        /// <summary>
+        /// セリフ
+        /// </summary>
+        List<string> Serifs = new List<string>();
+
         public void Start()
         {
             var token = ini.GetValue("BotSetting", "Token");
@@ -97,6 +102,8 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await CancelOparation(e);
             // 使い方
             client.MessageReceived += async (s, e) => await ShowUsage(e);
+            // 会話
+            client.MessageReceived += async (s, e) => await PutSerif(e);
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
@@ -136,6 +143,13 @@ namespace SinobigamiBot
                 LastOperations.Add(i.User, Operation.None);
             }
 
+            // セリフ
+            if (System.IO.File.Exists("serif.txt"))
+            {
+                foreach (var line in System.IO.File.ReadLines("serif.txt"))
+                    Serifs.Add(line.Replace(@"\n", "\n").Trim());
+                Serifs.RemoveAll(s => s == "");
+            }
             completedInitialize = true;
         }
 
@@ -635,6 +649,21 @@ namespace SinobigamiBot
                 var lines = System.IO.File.ReadLines("./usage.txt");
                 var str = string.Join("\n", lines);
                 await e.Channel.SendMessage(str);
+            }
+        }
+        /// <summary>
+        /// ランダムなセリフを喋る
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task PutSerif(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            if (!Regex.IsMatch(e.Message.Text, "お(話|はなし)して")) return;
+            if (Serifs.Count == 0) await e.Channel.SendMessage("ふぁいる のっと ふぁうんど ！");
+            else
+            {
+                await e.Channel.SendMessage(Serifs.Sample());
             }
         }
 
