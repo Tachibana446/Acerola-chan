@@ -77,6 +77,8 @@ namespace SinobigamiBot
             // 秘密一覧
             client.MessageReceived += async (s, e) => await ShowSecrets(e);
 
+            client.MessageReceived += async (s, e) => await SetSecretFromCommand(e);
+
             // Dice roll
             client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
             // Dice Rest
@@ -361,6 +363,42 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// 他Botのコマンドで秘密を取得した場合
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetSecretFromCommand(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = e.Message.Text.Replace('　', ' ');
+            var regex = new Regex(@"^#秘密公開\s+(?<secret>.*?)\s+(?<users>.*)");
+            var match = regex.Match(text);
+            if (!match.Success) return;
+            var usersStr = match.Groups["users"].Value.Replace('　', ' ').Split(' ');
+            var secret = match.Groups["secret"].Value.Trim();
+            var users = new List<UserInfo>();
+            foreach (var name in usersStr)
+            {
+                UserInfo user;
+                try
+                {
+                    user = GetMatchUserInfo(name.Trim());
+                }
+                catch
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $" {name}にマッチするユーザーが複数いてわからないよ");
+                    return;
+                }
+                if (user != null)
+                    users.Add(user);
+            }
+            foreach (var u in users)
+                u.AddSecret(secret);
+            await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NameOrNick()))} は {secret} の秘密を 得た！");
+            SaveUserInfo(e.Server);
+        }
+
+        /// <summary>
         /// 秘密の一覧を表示
         /// </summary>
         /// <param name="e"></param>
@@ -611,6 +649,45 @@ namespace SinobigamiBot
                     return user;
             }
             return null;
+        }
+
+        /// <summary>
+        /// UserInfosからマッチするユーザーを返す。マッチしなければNull、複数マッチすれば例外
+        /// </summary>
+        /// <param name="pattern"></param>
+        /// <param name="excludedUser"></param>
+        /// <returns></returns>
+        private UserInfo GetMatchUserInfo(string pattern, List<UserInfo> excludedUser = null)
+        {
+            var regex = new Regex(pattern);
+            var result = new List<UserInfo>();
+            foreach (var info in UserInfos)
+            {
+                if (excludedUser != null && excludedUser.Contains(info))
+                    continue;
+                if (info.User.Nickname != null && regex.IsMatch(info.User.Nickname))
+                {
+                    result.Add(info);
+                    continue;
+                }
+                if (regex.IsMatch(info.User.Name))
+                    result.Add(info);
+            }
+            if (result.Count == 0) return null;
+            // マッチするユーザーが複数いる場合は完全にマッチするユーザーを探す
+            if (result.Count > 1)
+            {
+                var perfectMatchUsers = new List<UserInfo>();
+                foreach (var u in result)
+                {
+                    if (pattern == u.User.Name || (u.User.Nickname != null && pattern == u.User.Nickname))
+                        perfectMatchUsers.Add(u);
+                }
+                if (perfectMatchUsers.Count != 1)
+                    throw new Exception("候補が２人以上居ます");
+                return perfectMatchUsers.First();
+            }
+            return result.First();
         }
 
         /// <summary>
