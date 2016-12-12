@@ -105,6 +105,10 @@ namespace SinobigamiBot
             // 会話
             client.MessageReceived += async (s, e) => await PutSerif(e);
 
+            // クイズ // 解答の方を先にすること
+            client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
+            client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
+
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
@@ -665,6 +669,83 @@ namespace SinobigamiBot
             {
                 await e.Channel.SendMessage(Serifs.Sample());
             }
+        }
+
+        DateTime QuestionStart;
+        bool reverseButtle = false;
+        PokeType QuizPokemon = null;
+        /// <summary>
+        /// クイズの出題
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task QuestionTypeQuiz(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            if (!Regex.IsMatch(e.Message.Text, @"クイズ")) return;
+            var text = "タイプ相性クイズ！\n";
+            if (new bool[] { true, false }.ToList().Sample())
+            {
+                reverseButtle = true;
+                text += "さかさバトル！\n";
+            }
+            else
+            {
+                reverseButtle = false;
+            }
+            var types = new List<string>(Enum.GetNames(typeof(PokeType.Type)));
+            if (new bool[] { true, false }.ToList().Sample())
+            {
+                var type = PokeType.Parse(types.Sample());
+                QuizPokemon = new PokeType(type);
+                text += $"{type.ToString()}タイプのポケモンが現れた！どうする？(技のタイプ名を返信）";
+            }
+            else
+            {
+                var type1 = PokeType.Parse(types.Sample());
+                PokeType.Type type2 = PokeType.Parse(types.Sample());
+                while (type1 == type2 || type2 == PokeType.Type.none) type2 = PokeType.Parse(types.Sample());
+                QuizPokemon = new PokeType(type1, type2);
+                text += $"{type1.ToString()}/{type2.ToString()}タイプのポケモンが現れた！どうする？（技のタイプ名を返信）";
+            }
+            await e.Channel.SendMessage(text);
+            QuestionStart = DateTime.Now;
+        }
+
+        /// <summary>
+        /// クイズの解答
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task AnswerTypeQuiz(MessageEventArgs e)
+        {
+            if (QuizPokemon == null) return;
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var text = Regex.Replace(e.Message.Text.Replace('　', ' '), @"@(.*?)\s", "");
+            var type = PokeType.Parse(text);
+            if (type == PokeType.Type.none) return;
+            var atk = new PokeType(type);
+            double result;
+            if (reverseButtle) result = atk.AttackReverse(QuizPokemon);
+            else result = atk.Attack(QuizPokemon);
+            var sec = (DateTime.Now - QuestionStart).Seconds;
+            if (result == 1)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" 効果は普通のようだ…({sec}秒)");
+            }
+            else if (result == 0)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" 効果はないようだ…({sec}秒)");
+            }
+            else if (result < 1)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" 効果は今ひとつのようだ…({result}倍, {sec}秒)");
+            }
+            else
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" 効果はばつぐんだ!!({result}倍 , {sec}秒)");
+            }
+            QuizPokemon = null;
         }
 
         // ----------------------------------------------------- //
