@@ -61,6 +61,8 @@ namespace SinobigamiBot
 
             // Set Users
             client.MessageReceived += (s, e) => Initialize(e);
+            // Reload Users
+            client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
             // Send Relation
             client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
             // Show Choices Emotion
@@ -135,6 +137,28 @@ namespace SinobigamiBot
             }
 
             completedInitialize = true;
+        }
+
+        /// <summary>
+        /// UserInfosを再ロード
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task ReloadUserInfo(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var regex = new Regex("リロードして");
+            if (!regex.IsMatch(e.Message.Text)) return;
+
+            if (ExistsUserInfoFile(e.Server))
+            {
+                UserInfos = LoadUserInfo(e);
+                await e.Channel.SendMessage("ユーザー情報をリロードしたよ");
+            }
+            else
+            {
+                await e.Channel.SendMessage(e.User.Mention + " ユーザー情報のファイルがないよ？");
+            }
         }
 
         /// <summary>
@@ -796,7 +820,10 @@ namespace SinobigamiBot
                     continue;
                 }
 
-                string key = line.Split('=')[0], value = line.Split('=')[1];
+                var splited = line.Split('=').ToArray();
+                if (splited.Length < 2)
+                    continue;
+                string key = splited[0], value = splited[1];
                 switch (key)
                 {
                     case "Id":
