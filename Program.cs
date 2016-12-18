@@ -113,7 +113,7 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
 
             // DEBUG
-            client.MessageReceived += async (s, e) => await SendAudio(e);
+            //client.MessageReceived += async (s, e) => await SendAudio(e);
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
@@ -172,6 +172,7 @@ namespace SinobigamiBot
             if (Regex.IsMatch(e.Message.Text, @"DEBUG"))
             {
                 var sample = new VoiceSample(client);
+                if (e.User.VoiceChannel == null) return;
                 await sample.SendAudio(e.User.VoiceChannel, "dice.mp3");
             }
         }
@@ -654,6 +655,11 @@ namespace SinobigamiBot
             }
             var sum = res.Sum();
             string result = "(" + string.Join(",", res.Select(a => a.ToString())) + ")= " + sum.ToString();
+            if (e.User.VoiceChannel != null && System.IO.File.Exists("dice.mp3"))
+            {
+                var sample = new VoiceSample(client);
+                await sample.SendAudio(e.User.VoiceChannel, "dice.mp3");
+            }
             await e.Channel.SendMessage(e.User.Mention + " " + result);
             LastOperations[e.User] = Operation.None;
             return;
