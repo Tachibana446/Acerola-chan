@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Discord;
 using System.Text.RegularExpressions;
 using Discord.Commands;
+using Discord.Audio;
 using System.Drawing;
 
 namespace SinobigamiBot
@@ -64,6 +65,8 @@ namespace SinobigamiBot
             });
             */
 
+            client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
+
             // Set Users
             client.MessageReceived += (s, e) => Initialize(e);
             // Reload Users
@@ -109,6 +112,9 @@ namespace SinobigamiBot
             client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
             client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
 
+            // DEBUG
+            client.MessageReceived += async (s, e) => await SendAudio(e);
+
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
@@ -152,11 +158,22 @@ namespace SinobigamiBot
             {
                 foreach (var line in System.IO.File.ReadLines("serif/serif.txt"))
                     Serifs.Add(line.Replace(@"\n", "\n").Trim());
-                if (System.IO.File.Exists("serif/lucky.txt"))
-                    Serifs.AddRange(System.IO.File.ReadLines("serif/lucky.txt"));
-                Serifs.RemoveAll(s => s == "");
+
             }
+            if (System.IO.File.Exists("serif/lucky.txt"))
+                Serifs.AddRange(System.IO.File.ReadLines("serif/lucky.txt"));
+            Serifs.RemoveAll(s => s == "");
             completedInitialize = true;
+        }
+
+        private async Task SendAudio(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            if (Regex.IsMatch(e.Message.Text, @"DEBUG"))
+            {
+                var sample = new VoiceSample(client);
+                await sample.SendAudio(e.User.VoiceChannel, "dice.mp3");
+            }
         }
 
         /// <summary>
