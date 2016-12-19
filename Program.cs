@@ -53,6 +53,10 @@ namespace SinobigamiBot
             if (clientId != null && bool.Parse(ini.GetValue("BotSetting", "OpenInviteUrl")))
                 System.Diagnostics.Process.Start($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
 
+            var inviteSw = new System.IO.StreamWriter("invite.txt");
+            inviteSw.WriteLine($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
+            inviteSw.Close();
+
             var rpFlag = ini.GetValue("BotSetting", "ResetPlot");
             if (rpFlag != null) ResetPlotOnShow = bool.Parse(rpFlag);
 
@@ -67,58 +71,68 @@ namespace SinobigamiBot
 
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
-            // Set Users
-            client.MessageReceived += (s, e) => Initialize(e);
-            // Reload Users
-            client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
-            // Send Relation
-            client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
-            // Show Choices Emotion
-            client.MessageReceived += async (s, e) => await SetEmotion(e);
-            // Select Choice
-            client.MessageReceived += async (s, e) => await SelectEmotion(e);
-            // Show Emotions List
-            client.MessageReceived += async (s, e) => await ShowEmotionList(e);
+            try
+            {
+                // Set Users
+                client.MessageReceived += (s, e) => Initialize(e);
+                // Reload Users
+                client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
+                // Send Relation
+                client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
+                // Show Choices Emotion
+                client.MessageReceived += async (s, e) => await SetEmotion(e);
+                // Select Choice
+                client.MessageReceived += async (s, e) => await SelectEmotion(e);
+                // Show Emotions List
+                client.MessageReceived += async (s, e) => await ShowEmotionList(e);
 
-            // 秘密取得
-            client.MessageReceived += async (s, e) => await SetOtherSecret(e);
-            // 秘密一覧
-            client.MessageReceived += async (s, e) => await ShowSecrets(e);
+                // 秘密取得
+                client.MessageReceived += async (s, e) => await SetOtherSecret(e);
+                // 秘密一覧
+                client.MessageReceived += async (s, e) => await ShowSecrets(e);
 
-            client.MessageReceived += async (s, e) => await SetSecretFromCommand(e);
+                client.MessageReceived += async (s, e) => await SetSecretFromCommand(e);
 
-            // Dice roll
-            client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
-            // Dice Rest
-            client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
+                // Dice roll
+                client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
+                // Dice Rest
+                client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
 
-            // Set Plot
-            client.MessageReceived += async (s, e) => await SetPlotEvent(e);
-            // Set Plot Again
-            client.MessageReceived += async (s, e) => await AgainSetPlot(e);
-            // Reset Plot
-            client.MessageReceived += async (s, e) => await ResetPlotEvent(e);
-            // Show Plot
-            client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
+                // Set Plot
+                client.MessageReceived += async (s, e) => await SetPlotEvent(e);
+                // Set Plot Again
+                client.MessageReceived += async (s, e) => await AgainSetPlot(e);
+                // Reset Plot
+                client.MessageReceived += async (s, e) => await ResetPlotEvent(e);
+                // Show Plot
+                client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
-            // キャンセル
-            client.MessageReceived += async (s, e) => await CancelOparation(e);
-            // 使い方
-            client.MessageReceived += async (s, e) => await ShowUsage(e);
-            // 会話
-            client.MessageReceived += async (s, e) => await PutSerif(e);
+                // キャンセル
+                client.MessageReceived += async (s, e) => await CancelOparation(e);
+                // 使い方
+                client.MessageReceived += async (s, e) => await ShowUsage(e);
+                // 会話
+                client.MessageReceived += async (s, e) => await PutSerif(e);
 
-            // クイズ // 解答の方を先にすること
-            client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
-            client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
+                // クイズ // 解答の方を先にすること
+                client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
+                client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
 
-            // DEBUG
-            //client.MessageReceived += async (s, e) => await SendAudio(e);
+                // タイマー
+                client.MessageReceived += async (s, e) => await SetAlarm(e);
+                // DEBUG
+                //client.MessageReceived += async (s, e) => await SendAudio(e);
+            }
+            catch (Exception exc)
+            {
+                var sw = new System.IO.StreamWriter("log.txt");
+                sw.WriteLine($"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}\n{exc}\n{exc.Message}");
+                sw.Close();
+            }
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
-
 
         /// <summary>
         /// 最初にユーザーを全部リストに入れる
@@ -722,12 +736,14 @@ namespace SinobigamiBot
             if (new bool[] { true, false }.ToList().Sample())
             {
                 var type = PokeType.Parse(types.Sample());
+                while (type == PokeType.Type.none) { type = PokeType.Parse(types.Sample()); }
                 QuizPokemon = new PokeType(type);
                 text += $"{type.ToString()}タイプのポケモンが現れた！どうする？(技のタイプ名を返信）";
             }
             else
             {
                 var type1 = PokeType.Parse(types.Sample());
+                while (type1 == PokeType.Type.none) { type1 = PokeType.Parse(types.Sample()); }
                 PokeType.Type type2 = PokeType.Parse(types.Sample());
                 while (type1 == type2 || type2 == PokeType.Type.none) type2 = PokeType.Parse(types.Sample());
                 QuizPokemon = new PokeType(type1, type2);
@@ -773,9 +789,95 @@ namespace SinobigamiBot
             QuizPokemon = null;
         }
 
+        // ===========================================================================================================================
+        //
+        //             a l a r m 
+        //
+        // ===========================================================================================================================
+
+        private async Task SetAlarm(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            if (!Regex.IsMatch(e.Message.Text, @"アラームして")) return;
+            var text = ToNarrow(e.Message.Text);
+            var m0 = Regex.Match(text, @"(\d+)(時間|分|秒)後");
+            var m1 = Regex.Match(text, @"(\d+)(時|:)(\d+)(分|:)(\d+)(秒?)");
+            var m2 = Regex.Match(text, @"(\d+)(時|:)(\d+)(分?)");
+            var m3 = Regex.Match(text, @"(\d+)時");
+
+            DateTime target = DateTime.Now;
+            bool timerOn = false;
+            if (m0.Success)
+            {
+                int time = int.Parse(m0.Groups[1].Value);
+                if (m0.Groups[2].Value == "時間")
+                    target = target.AddHours(time);
+                else if (m0.Groups[2].Value == "分")
+                    target = target.AddMinutes(time);
+                else if (m0.Groups[2].Value == "秒")
+                    target = target.AddSeconds(time);
+                if (DateTime.Now < target) timerOn = true;
+            }
+            else if (m1.Success)
+            {
+                string h = m1.Groups[1].Value, m = m1.Groups[3].Value, s = m1.Groups[5].Value;
+                var now = DateTime.Now;
+                var hour = int.Parse(h);
+                bool add12 = false;
+                if (now.Hour > hour) add12 = true;
+                target = new DateTime(now.Year, now.Month, now.Day, int.Parse(h), int.Parse(m), int.Parse(s));
+                if (add12) target = target.AddHours(12);
+                if (now < target) timerOn = true;
+            }
+            else if (m2.Success)
+            {
+                string h = m2.Groups[1].Value, m = m2.Groups[3].Value;
+                var now = DateTime.Now;
+                var hour = int.Parse(h);
+                bool add12 = false;
+                if (now.Hour > hour) add12 = true;
+                target = new DateTime(now.Year, now.Month, now.Day, int.Parse(h), int.Parse(m), 0);
+                if (add12) target = target.AddHours(12);
+                if (now < target) timerOn = true;
+            }
+            else if (m3.Success)
+            {
+                string h = m3.Groups[1].Value;
+                var now = DateTime.Now;
+                var hour = int.Parse(h);
+                bool add12 = false;
+                if (now.Hour > hour) add12 = true;
+                target = new DateTime(now.Year, now.Month, now.Day, int.Parse(h), 0, 0);
+                if (add12) target = target.AddHours(12);
+                if (now < target) timerOn = true;
+            }
+            else
+            {
+                return;
+            }
+            if (timerOn)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " アラームをかけるよ！(" + target.ToShortTimeString() + ")");
+                var task = Task.Run(() =>
+                {
+                    var now = DateTime.Now;
+                    while (now < target)
+                    {
+                        for (int i = 0; i < 10000; i++)
+                        { int a = i + 1; }
+                        now = DateTime.Now;
+                    }
+                    e.Channel.SendMessage(e.User.Mention + " 時間になったよ！(" + DateTime.Now.ToShortTimeString() + ")");
+                });
+                await task;
+            }
+        }
+
+        // ======================================================//
         // ----------------------------------------------------- //
         //                    Util                               //
         // ----------------------------------------------------- //
+        // ======================================================//
 
 
         /// <summary>
@@ -1080,8 +1182,8 @@ namespace SinobigamiBot
         /// <returns></returns>
         public static string ToNarrow(string input)
         {
-            var wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ";
-            var narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            var wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
+            var narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
 
             string output = "";
             foreach (var c in input)
@@ -1097,8 +1199,8 @@ namespace SinobigamiBot
 
         public static string ToWide(string input)
         {
-            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ";
-            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
+            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
 
             string output = "";
             foreach (var c in input)
