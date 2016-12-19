@@ -17,7 +17,7 @@ namespace SinobigamiBot
         static void Main(string[] args) => new Program().Start();
 
         DiscordClient client = new DiscordClient();
-        IniFile ini = new IniFile();
+        SettingData setting = new SettingData();
 
         Random random = new Random();
 
@@ -25,10 +25,6 @@ namespace SinobigamiBot
         List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
 
         Dictionary<User, Operation> LastOperations = new Dictionary<User, Operation>();
-        /// <summary>
-        /// プロットの表示時に自動的にプロットをリセットするか
-        /// </summary>
-        bool ResetPlotOnShow = false;
 
         /// <summary>
         /// 各プレイヤーの秘密保持情報など
@@ -46,19 +42,13 @@ namespace SinobigamiBot
 
         public void Start()
         {
-            var token = ini.GetValue("BotSetting", "Token");
-            if (token == null) throw new Exception("Tokenがiniファイル内に見つかりません");
-            var clientId = ini.GetValue("BotSetting", "ClientId");
-
-            if (clientId != null && bool.Parse(ini.GetValue("BotSetting", "OpenInviteUrl")))
-                System.Diagnostics.Process.Start($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
+            var token = setting.Token;
+            if (token == null || token == "") throw new Exception("Tokenが設定ファイル内に見つかりません");
+            var clientId = setting.ClientId;
 
             var inviteSw = new System.IO.StreamWriter("invite.txt");
             inviteSw.WriteLine($"https://discordapp.com/api/oauth2/authorize?client_id={clientId}&scope=bot");
             inviteSw.Close();
-
-            var rpFlag = ini.GetValue("BotSetting", "ResetPlot");
-            if (rpFlag != null) ResetPlotOnShow = bool.Parse(rpFlag);
 
             // Use Command
             /*
@@ -609,7 +599,7 @@ namespace SinobigamiBot
             if (regex.IsMatch(e.Message.Text))
             {
                 MakeGraph.MakePlotGraph(ResharpPlot(), "./plot.png");
-                if (ResetPlotOnShow)
+                if (setting.ResetPlotOnShow)
                 {
                     ResetPlot();
                     LastOperations[e.User] = Operation.ResetPlot;
@@ -669,7 +659,7 @@ namespace SinobigamiBot
             }
             var sum = res.Sum();
             string result = "(" + string.Join(",", res.Select(a => a.ToString())) + ")= " + sum.ToString();
-            if (e.User.VoiceChannel != null && System.IO.File.Exists("dice.mp3"))
+            if (setting.PlayDiceSE && e.User.VoiceChannel != null && System.IO.File.Exists("dice.mp3"))
             {
                 var sample = new VoiceSample(client);
                 await sample.SendAudio(e.User.VoiceChannel, "dice.mp3");

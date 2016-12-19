@@ -8,6 +8,5 @@ namespace SinobigamiBot
 {
     public class Settings
     {
-        public static bool PlayDiceSE = true;
     }
 }
