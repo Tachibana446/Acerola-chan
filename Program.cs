@@ -73,12 +73,14 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await ResetPlayersOrder(e);
                 // Reload Users
                 client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
-                // Send Relation
+                // 関係図を作成し送信
                 client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
                 // Show Choices Emotion
                 client.MessageReceived += async (s, e) => await SetEmotion(e);
                 // Select Choice
                 client.MessageReceived += async (s, e) => await SelectEmotion(e);
+                // コマンドから感情取得
+                client.MessageReceived += async (s, e) => await SetEmotionCommand(e);
                 // Show Emotions List
                 client.MessageReceived += async (s, e) => await ShowEmotionList(e);
 
@@ -369,6 +371,38 @@ namespace SinobigamiBot
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得たよ！(๑˃̵ᴗ˂̵)و");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
             server.SavePlayersInfo();         // 保存
+        }
+
+        /// <summary>
+        /// 感情をコマンドで取得する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetEmotionCommand(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.Replace('　', ' '), @"^#感情取得\s(?<emotion>.*)\s(?<user1>.*)\s(?<user2>.*)");
+            if (!match.Success) return;
+            var server = GetServer(e);
+            string emoStr = match.Groups["emotion"].Value;
+            var emo = Emotion.ParseEmotion(emoStr);
+            if (emo == null) { await e.Channel.SendMessage(e.User.Mention + $" ${emoStr}という感情はないよ？"); return; }
+            UserInfo user1 = null, user2 = null;
+            try
+            {
+                user1 = server.GetMatchPlayer(match.Groups["user1"].Value);
+                if (user1 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user1}というユーザーはいないよ？"); return; }
+                user2 = server.GetMatchPlayer(match.Groups["user2"].Value);
+                if (user2 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user2}というユーザーはいないよ？"); return; }
+            }
+            catch (Exception exc)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + exc.Message);
+                return;
+            }
+            user1.AddEmotion(user2.User, emo);
+            await e.Channel.SendMessage($"{user1.NickOrName()}は{user2.NickOrName()}に{emo.Name}を得た！");
+            server.SavePlayersInfo();
         }
 
         private bool isGM(User user)

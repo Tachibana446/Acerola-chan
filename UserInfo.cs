@@ -138,6 +138,19 @@ namespace SinobigamiBot
             else
                 return EmotionType.minus;
         }
+
+        public static Emotion ParseEmotion(string str)
+        {
+            foreach (var emo in PlusEmotions)
+            {
+                if (emo.Name == str.Trim()) return emo;
+            }
+            foreach (var emo in MinusEmotions)
+            {
+                if (emo.Name == str.Trim()) return emo;
+            }
+            return null;
+        }
     }
 
     enum EmotionType
