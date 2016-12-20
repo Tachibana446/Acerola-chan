@@ -19,5 +19,79 @@ namespace SinobigamiBot
             var rand = new Random();
             return self[rand.Next(self.Count)];
         }
+
+        /// <summary>
+        /// 先頭のアイテムをポップ（返して削除）
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="list"></param>
+        /// <returns></returns>
+        public static T Pop<T>(this List<T> list)
+        {
+            var res = list[0];
+            list.RemoveAt(0);
+            return res;
+        }
+
+
+        /// <summary>
+        /// 文字を中央揃え
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        public static string ToCenter(this string input, int size, string pad = "　")
+        {
+            if (input.Length >= size) return input;
+            int diff = size - input.Length;
+            int right = diff / 2;
+            int left = diff - right;
+            string result = "";
+            for (int i = 0; i < left; i++) result += pad;
+            result += input;
+            for (int i = 0; i < right; i++) result += pad;
+            return result;
+        }
+
+
+        /// <summary>
+        /// 全角英数字を半角に
+        /// </summary>
+        /// <param name="input"></param>
+        /// <returns></returns>
+        public static string ToNarrow(this string input)
+        {
+            var wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
+            var narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+
+            string output = "";
+            foreach (var c in input)
+            {
+                int index = wide.IndexOf(c);
+                if (index >= 0)
+                    output += narrow[index];
+                else
+                    output += c;
+            }
+            return output;
+        }
+
+        public static string ToWide(this string input)
+        {
+            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
+            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
+
+            string output = "";
+            foreach (var c in input)
+            {
+                int index = narrow.IndexOf(c);
+                if (index >= 0)
+                    output += wide[index];
+                else
+                    output += c;
+            }
+            return output;
+        }
+
     }
 }

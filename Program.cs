@@ -21,15 +21,10 @@ namespace SinobigamiBot
 
         Random random = new Random();
 
-        Dictionary<User, List<int>> Plots { get; set; } = new Dictionary<User, List<int>>();
-        List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
-
-        Dictionary<User, Operation> LastOperations = new Dictionary<User, Operation>();
-
         /// <summary>
         /// 各プレイヤーの秘密保持情報など
         /// </summary>
-        List<UserInfo> UserInfos = new List<UserInfo>();
+        List<ServerData> ServerDatas = new List<ServerData>();
         /// <summary>
         /// 初期化が済んだかどうか
         /// </summary>
@@ -39,6 +34,12 @@ namespace SinobigamiBot
         /// セリフ
         /// </summary>
         List<string> Serifs = new List<string>();
+
+        const string serifFolder = "./data/serif";
+        const string serifFilePath = serifFolder + "/serif.txt";
+        const string luckySerifFilePath = serifFolder + "/lucky.txt";
+        public const string serverDataFolder = "./data/servers";
+        const string diceSeFilePath = "./data/dice.mp3";
 
         public void Start()
         {
@@ -58,6 +59,7 @@ namespace SinobigamiBot
                 x.HelpMode = HelpMode.Public;
             });
             */
+            InitializeBot();
 
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
@@ -101,8 +103,6 @@ namespace SinobigamiBot
                 // Show Plot
                 client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
-                // キャンセル
-                client.MessageReceived += async (s, e) => await CancelOparation(e);
                 // 使い方
                 client.MessageReceived += async (s, e) => await ShowUsage(e);
                 // 会話
@@ -129,47 +129,54 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// セリフの読み込みなど
+        /// </summary>
+        private void InitializeBot()
+        {
+            if (completedInitialize) return;
+            // セリフ
+            if (System.IO.File.Exists(serifFilePath))
+            {
+                foreach (var line in System.IO.File.ReadLines(serifFilePath))
+                    Serifs.Add(line.Replace(@"\n", "\n").Trim());
+
+            }
+            if (System.IO.File.Exists(luckySerifFilePath))
+                Serifs.AddRange(System.IO.File.ReadLines(luckySerifFilePath));
+            Serifs.RemoveAll(s => s.Trim() == "");
+
+            completedInitialize = true;
+        }
+        /// <summary>
         /// 最初にユーザーを全部リストに入れる
         /// 保存ファイルがあればそちらを読み込む
         /// </summary>
         /// <param name="e"></param>
         private void Initialize(MessageEventArgs e)
         {
-            if (completedInitialize)
+            ServerData server = GetServer(e);
+            if (server == null)
+            {
+                server = new ServerData(e.Server);
+                ServerDatas.Add(server);
+            }
+
+            if (server.isInitialized)
                 return;
-            if (UserInfos.Count == 0)
+            if (ExistsUserInfoFile(e.Server))
             {
-                if (ExistsUserInfoFile(e.Server))
+                server.LoadPlayersInfo();
+            }
+            else
+            {
+                var users = GetServerUsers(e.Server, true);
+                foreach (var user in users)
                 {
-                    UserInfos = LoadUserInfo(e);
-                }
-                else
-                {
-                    var users = GetServerUsers(e.Server);
-                    // DEBUG
-                    // users = GetServerUsers(e.Server,true,true);
-                    foreach (var user in users)
-                    {
-                        UserInfos.Add(new UserInfo(user));
-                    }
+                    server.Players.Add(new UserInfo(user));
                 }
             }
-            // LastOperationの待機
-            foreach (var i in UserInfos)
-            {
-                LastOperations.Add(i.User, Operation.None);
-            }
 
-            // セリフ
-            if (System.IO.File.Exists("serif/serif.txt"))
-            {
-                foreach (var line in System.IO.File.ReadLines("serif/serif.txt"))
-                    Serifs.Add(line.Replace(@"\n", "\n").Trim());
 
-            }
-            if (System.IO.File.Exists("serif/lucky.txt"))
-                Serifs.AddRange(System.IO.File.ReadLines("serif/lucky.txt"));
-            Serifs.RemoveAll(s => s == "");
             completedInitialize = true;
         }
 
@@ -188,6 +195,7 @@ namespace SinobigamiBot
                 await e.Channel.SendMessage(e.User.Mention + " ユーザー名をスペース区切りで指定してね！");
                 return;
             }
+            var server = ServerDatas.First(s => s.Server.Id == e.Server.Id);
             var users = e.Server.Users;
             var userInfos = new List<UserInfo>();
             var usernames = match.Groups[1].Value.Split(' ').Select(s => s.Trim()).ToList();
@@ -220,16 +228,22 @@ namespace SinobigamiBot
                     userInfos.Add(imcompleteMatchs[0]);
             }
             // TODO サーバーファイルのバックアップ
-            UserInfos = userInfos.Distinct().ToList();
-            SaveUserInfo(e.Server);
-            var text = string.Join(",", UserInfos.Select(u => u.NickOrName()));
+            server.Players = userInfos.Distinct().ToList();
+            server.SavePlayersInfo();
+            var text = string.Join(",", server.Players.Select(u => u.NickOrName()));
             await e.Channel.SendMessage($"{text} を参加者として登録したよ！（ただしこれまでのデータは破棄されました）");
         }
 
+        /// <summary>
+        /// 参加者リスト
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
         private async Task PlayersList(MessageEventArgs e)
         {
             if (e.Message.IsAuthor || !Regex.IsMatch(e.Message.Text, @"参加者の?リスト")) return;
-            var users = string.Join("\n", UserInfos.Select(u => u.NickOrName()));
+            var server = GetServer(e);
+            var users = string.Join("\n", server.Players.Select(u => u.NickOrName()));
             await e.Channel.SendMessage($"参加者：\n{users}");
         }
 
@@ -254,50 +268,17 @@ namespace SinobigamiBot
             if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
             var regex = new Regex("リロードして");
             if (!regex.IsMatch(e.Message.Text)) return;
+            var server = ServerDatas.First(s => s.Server.Id == e.Server.Id);
 
             if (ExistsUserInfoFile(e.Server))
             {
-                UserInfos = LoadUserInfo(e);
+                server.LoadPlayersInfo();
                 await e.Channel.SendMessage("ユーザー情報をリロードしたよ");
             }
             else
             {
                 await e.Channel.SendMessage(e.User.Mention + " ユーザー情報のファイルがないよ？");
             }
-        }
-
-        /// <summary>
-        /// キャンセルと言われたときのいろいろなキャンセル処理
-        /// </summary>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        private async Task CancelOparation(MessageEventArgs e)
-        {
-            if (e.Message.IsAuthor || !e.Message.IsMentioningMe())
-                return;
-            if (!Regex.IsMatch(e.Message.Text, @"キャンセル|cancel"))
-                return;
-            var message = "";
-            switch (LastOperations[e.User])
-            {
-                case Operation.EmotionChoice:
-                    setEmotionTemp.Remove(e.User);
-                    message = "感情選択をキャンセルしました";
-                    break;
-                case Operation.SetPlot:
-                    Plots.Remove(e.User);
-                    message = "プロットを消去しました";
-                    break;
-                case Operation.ResetPlot:
-                    Plots = OldPlots.Last();
-                    message = "プロットを1つ前の状態に戻しました";
-                    break;
-                default:
-                    message = "キャンセルする操作をしていません";
-                    break;
-            }
-            await e.Channel.SendMessage(e.User.Mention + " " + message);
-            LastOperations[e.User] = Operation.None;
         }
 
         /// <summary>
@@ -314,33 +295,39 @@ namespace SinobigamiBot
         private async Task SetEmotion(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^感情取得(.*)");
+            var regex = new Regex(@"^感情の?取得(.*)");
             var match = regex.Match(e.Message.Text);
             if (match.Success)
             {
+                var server = GetServer(e);
                 var target = match.Groups[1].Value.Replace('　', ' ').Trim();
                 if (target == "")
                 {
                     await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてね(｡☌ᴗ☌｡)");
                     return;
                 }
-                User targetUser = GetMatchUser(e, target);
-                // DEBUG
-                //targetUser = GetMatchUser(e, target, false, true);
-
+                UserInfo targetUser = null;
+                try
+                {
+                    targetUser = server.GetMatchPlayer(target);
+                }
+                catch (Exception exc)
+                {
+                    await e.Channel.SendMessage(exc.Message);
+                    return;
+                }
                 if (targetUser != null)
                 {
                     var choice = Emotion.RandomChoice();
                     if (setEmotionTemp.ContainsKey(e.User))
                     {
-                        setEmotionTemp[e.User] = new Tuple<User, string>(targetUser, choice);
+                        setEmotionTemp[e.User] = new Tuple<User, string>(targetUser.User, choice);
                     }
                     else
                     {
-                        setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser, choice));
+                        setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser.User, choice));
                     }
-                    LastOperations[e.User] = Operation.EmotionChoice;
-                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.Name}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
+                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.NickOrName()}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
                     return;
                 }
                 else
@@ -375,12 +362,13 @@ namespace SinobigamiBot
                 em = Emotion.PlusEmotions[index];
             else
                 em = Emotion.MinusEmotions[index];
-            var uInfo = UserInfos.First(u => u.User.Id == e.User.Id);
+
+            var server = GetServer(e);
+            var uInfo = server.Players.First(u => u.User.Id == e.User.Id);
             uInfo.AddEmotion(setEmotionTemp[e.User].Item1, em);
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得たよ！(๑˃̵ᴗ˂̵)و");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
-            SaveUserInfo(e.Server);         // 保存
-            LastOperations[e.User] = Operation.None;
+            server.SavePlayersInfo();         // 保存
         }
 
         private bool isGM(User user)
@@ -401,13 +389,13 @@ namespace SinobigamiBot
         private async Task ShowRelationGraph(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^関係表示");
+            var regex = new Regex(@"^関係の?表示");
             if (!regex.IsMatch(e.Message.Text)) return;
+            var serverData = GetServer(e);
 
-            MakeGraph.MakeRelationGraph(UserInfos, "./relation.png");
+            MakeGraph.MakeRelationGraph(serverData.Players, "./relation.png");
             await e.Channel.SendFile("./relation.png");
 
-            LastOperations[e.User] = Operation.None;
         }
         /// <summary>
         /// 抱いている感情を羅列する
@@ -417,10 +405,11 @@ namespace SinobigamiBot
         private async Task ShowEmotionList(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var regex = new Regex(@"^感情一覧");
+            var regex = new Regex(@"^感情の?一覧");
             if (regex.IsMatch(e.Message.Text))
             {
-                var info = UserInfos.Find(i => i.User.Id == e.User.Id);
+                var server = GetServer(e);
+                var info = server.Players.Find(i => i.User.Id == e.User.Id);
                 if (info == null) throw new Exception("UserInfoがNull");
                 string message = "";
                 foreach (var emo in info.Emotions)
@@ -431,7 +420,6 @@ namespace SinobigamiBot
                 if (message == "")
                     message = "誰にも感情を抱いていないよ？";
                 await e.Channel.SendMessage(e.User.Mention + " " + message);
-                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -444,7 +432,7 @@ namespace SinobigamiBot
         {
             if (e.Message.IsAuthor) return;
             var text = ToNarrow(e.Message.Text);
-            var regex = new Regex(@"^秘密取得(.*)");
+            var regex = new Regex(@"^秘密の?取得(.*)");
             var match = regex.Match(text);
             if (!match.Success) return;
             var arg = match.Groups[1].Value.Trim();
@@ -453,7 +441,8 @@ namespace SinobigamiBot
                 await e.Channel.SendMessage(e.User.Mention + " 秘密を引数として与えてね");
                 return;
             }
-            var uinfo = UserInfos.Find(a => a.User.Id == e.User.Id);
+            var server = GetServer(e);
+            var uinfo = server.Players.Find(a => a.User.Id == e.User.Id);
             if (uinfo == null)
             {
                 await e.Channel.SendMessage($"{e.User.Mention} あなたは何かしらの理由でプレイヤーリストに載っていないので、秘密を得られません（GMやBOT等");
@@ -463,7 +452,7 @@ namespace SinobigamiBot
             string targetname = arg;
             try
             {
-                target = GetMatchUserInfo(arg);
+                target = server.GetMatchPlayer(arg);
             }
             catch
             {
@@ -481,7 +470,7 @@ namespace SinobigamiBot
             var name = uinfo.NickOrName();
 
             await e.Channel.SendMessage($"{name} は {targetname}の秘密を 手に入れた！");
-            SaveUserInfo(e.Server);
+            server.SavePlayersInfo();
         }
 
         /// <summary>
@@ -496,6 +485,7 @@ namespace SinobigamiBot
             var regex = new Regex(@"^#秘密公開\s+(?<secret>.*?)\s+(?<users>.*)");
             var match = regex.Match(text);
             if (!match.Success) return;
+            var server = GetServer(e);
             var usersStr = match.Groups["users"].Value.Replace('　', ' ').Split(' ');
             var secret = match.Groups["secret"].Value.Trim();
             var users = new List<UserInfo>();
@@ -504,7 +494,7 @@ namespace SinobigamiBot
                 UserInfo user;
                 try
                 {
-                    user = GetMatchUserInfo(name.Trim());
+                    user = server.GetMatchPlayer(name.Trim());
                 }
                 catch
                 {
@@ -517,7 +507,7 @@ namespace SinobigamiBot
             foreach (var u in users)
                 u.AddSecret(secret);
             await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NickOrName()))} は {secret} の秘密を 得た！");
-            SaveUserInfo(e.Server);
+            server.SavePlayersInfo();
         }
 
         /// <summary>
@@ -528,15 +518,16 @@ namespace SinobigamiBot
         private async Task ShowSecrets(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            if (!Regex.IsMatch(e.Message.Text, @"秘密一覧")) return;
-            var user = UserInfos.Find(u => u.User.Id == e.User.Id);
+            if (!Regex.IsMatch(e.Message.Text, @"秘密の?一覧")) return;
+            var server = GetServer(e);
+            var user = server.Players.Find(u => u.User.Id == e.User.Id);
 
             var username = user.NickOrName();
             var text = "";
             foreach (var secret in user.Secrets)
             {
                 if (text == "") text += $"{username}の持っている秘密\n";
-                text += $"{secret.Name} の秘密\n";
+                text += $"- {secret.Name} の秘密\n";
             }
             if (text == "") text = "秘密を一つも持っていないよ？";
 
@@ -551,6 +542,7 @@ namespace SinobigamiBot
         private async Task SetPlotEvent(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
+            var server = GetServer(e);
             var text = ToNarrow(e.Message.Text);
             var regex = new Regex(@"^(セット|せっと|set).*(\d+)");
             var andRegex = new Regex(@"^(セット|せっと|set).*(\d+).*(a|A)nd.*(\d+)");
@@ -587,16 +579,9 @@ namespace SinobigamiBot
             {
                 return;
             }
-            if (!Plots.Keys.Contains(e.User))
-            {
-                Plots.Add(e.User, plots);
-            }
-            else
-            {
-                Plots[e.User] = plots;
-            }
-            await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + $"未入力：{GetNotYetEnterUsersString(e.Server)}");
-            LastOperations[e.User] = Operation.SetPlot;
+            server.SetPlot(e.User, plots);
+
+            await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + $"未入力：{server.GetNotYetEnterUsersString()}");
         }
 
         /// <summary>
@@ -612,25 +597,15 @@ namespace SinobigamiBot
             var match = regex.Match(text);
             if (match.Success)
             {
+                var server = GetServer(e);
                 int plot = int.Parse(match.Groups[2].Value);
                 if (plot < 1 || plot > 6)
                 {
                     await e.Channel.SendMessage(e.User.Mention + " プロット値は１～６だよ");
                     return;
                 }
-                // Plotsが空なら一つ前の物を
-                if (Plots.Keys.Count == 0)
-                {
-                    if (OldPlots.Count == 0)
-                    {
-                        await e.Channel.SendMessage(e.User.Mention + " まずはsetで普通にプロット値を決めてね");
-                        return;
-                    }
-                    Plots = OldPlots.Last();
-                }
-                Plots[e.User] = new int[] { plot }.ToList();
+                server.SetPlotAgain(e.User, new int[] { plot }.ToList());
                 await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و");
-                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -645,9 +620,9 @@ namespace SinobigamiBot
             var regex = new Regex(@"プロット.*リセット");
             if (regex.IsMatch(e.Message.Text))
             {
-                ResetPlot();
+                var server = GetServer(e);
+                server.ResetPlot();
                 await e.Channel.SendMessage("プロット値をリセットしたよ");
-                LastOperations[e.User] = Operation.ResetPlot;
             }
         }
         /// <summary>
@@ -657,18 +632,16 @@ namespace SinobigamiBot
         /// <returns></returns>
         private async Task ShowPlotEvent(MessageEventArgs e)
         {
-            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
-            var regex = new Regex(@"プロット.*表示");
+            if (e.Message.IsAuthor) return;
+            var regex = new Regex(@"^プロットの?表示$");
             if (regex.IsMatch(e.Message.Text))
             {
-                MakeGraph.MakePlotGraph(ResharpPlot(), "./plot.png");
+                var server = GetServer(e);
+                MakeGraph.MakePlotGraph(server.ResharpPlot(), "./plot.png");
                 if (setting.ResetPlotOnShow)
                 {
-                    ResetPlot();
-                    LastOperations[e.User] = Operation.ResetPlot;
+                    server.ResetPlot();
                 }
-                else
-                    LastOperations[e.User] = Operation.None;
                 await e.Channel.SendFile("./plot.png");
             }
         }
@@ -685,7 +658,6 @@ namespace SinobigamiBot
             {
                 random = new Random();
                 await e.Channel.SendMessage("まそっぷ！");
-                LastOperations[e.User] = Operation.None;
             }
         }
 
@@ -722,13 +694,12 @@ namespace SinobigamiBot
             }
             var sum = res.Sum();
             string result = "(" + string.Join(",", res.Select(a => a.ToString())) + ")= " + sum.ToString();
-            if (setting.PlayDiceSE && e.User.VoiceChannel != null && System.IO.File.Exists("dice.mp3"))
+            if (setting.PlayDiceSE && e.User.VoiceChannel != null && System.IO.File.Exists(diceSeFilePath))
             {
                 var sample = new VoiceSample(client);
-                await sample.SendAudio(e.User.VoiceChannel, "dice.mp3");
+                await sample.SendAudio(e.User.VoiceChannel, diceSeFilePath);
             }
             await e.Channel.SendMessage(e.User.Mention + " " + result);
-            LastOperations[e.User] = Operation.None;
             return;
         }
 
@@ -738,11 +709,11 @@ namespace SinobigamiBot
                 return;
             if (Regex.IsMatch(e.Message.Text, @"usage|使い方"))
             {
-                if (!System.IO.File.Exists("./usage.txt"))
+                if (!System.IO.File.Exists("./data/usage.txt"))
                 {
                     throw new Exception("not found usage.txt");
                 }
-                var lines = System.IO.File.ReadLines("./usage.txt");
+                var lines = System.IO.File.ReadLines("./data/usage.txt");
                 var str = string.Join("\n", lines);
                 await e.Channel.SendMessage(str);
             }
@@ -932,6 +903,22 @@ namespace SinobigamiBot
         // ----------------------------------------------------- //
         // ======================================================//
 
+        /// <summary>
+        /// サーバを取得する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private ServerData GetServer(MessageEventArgs e)
+        {
+            if (!ServerDatas.Any(s => s.Server.Id == e.Server.Id))
+                return null;
+            return ServerDatas.First(s => s.Server.Id == e.Server.Id);
+        }
+
+        private ServerData GetServer(Server server)
+        {
+            return ServerDatas.First(s => s.Server.Id == server.Id);
+        }
 
         /// <summary>
         /// サーバー内のパターンに一致する名前のユーザーを返す
@@ -959,45 +946,6 @@ namespace SinobigamiBot
         }
 
         /// <summary>
-        /// UserInfosからマッチするユーザーを返す。マッチしなければNull、複数マッチすれば例外
-        /// </summary>
-        /// <param name="pattern"></param>
-        /// <param name="excludedUser"></param>
-        /// <returns></returns>
-        private UserInfo GetMatchUserInfo(string pattern, List<UserInfo> excludedUser = null)
-        {
-            var regex = new Regex(pattern);
-            var result = new List<UserInfo>();
-            foreach (var info in UserInfos)
-            {
-                if (excludedUser != null && excludedUser.Contains(info))
-                    continue;
-                if (info.User.Nickname != null && regex.IsMatch(info.User.Nickname))
-                {
-                    result.Add(info);
-                    continue;
-                }
-                if (regex.IsMatch(info.User.Name))
-                    result.Add(info);
-            }
-            if (result.Count == 0) return null;
-            // マッチするユーザーが複数いる場合は完全にマッチするユーザーを探す
-            if (result.Count > 1)
-            {
-                var perfectMatchUsers = new List<UserInfo>();
-                foreach (var u in result)
-                {
-                    if (pattern == u.User.Name || (u.User.Nickname != null && pattern == u.User.Nickname))
-                        perfectMatchUsers.Add(u);
-                }
-                if (perfectMatchUsers.Count != 1)
-                    throw new Exception("候補が２人以上居ます");
-                return perfectMatchUsers.First();
-            }
-            return result.First();
-        }
-
-        /// <summary>
         /// サーバー内のユーザーを取得する
         /// </summary>
         /// <param name="s"></param>
@@ -1014,35 +962,7 @@ namespace SinobigamiBot
             return users.ToList();
         }
 
-        /// <summary>
-        /// まだプロットを決めていないユーザーの一覧を文字列にして返す
-        /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
-        private string GetNotYetEnterUsersString(Server s)
-        {
-            var users = GetNotYetEnterUsers(s);
-            return string.Join(", ", users.Select(u => u.Nickname != null ? u.Nickname : u.Name));
-        }
 
-        /// <summary>
-        /// まだプロットを決めてないユーザーのリストを求める
-        /// </summary>
-        /// <param name="s"></param>
-        /// <returns></returns>
-        private List<User> GetNotYetEnterUsers(Server s)
-        {
-            var users = s.Users.Where(u => !u.IsBot && !isGM(u));
-            // DEBUG
-            //users = s.Users;
-            var result = new List<User>();
-            foreach (var u in users)
-            {
-                if (!Plots.Keys.Contains(u))
-                    result.Add(u);
-            }
-            return result;
-        }
 
         /// <summary>
         /// UserInfoの保存ファイルがあるかどうか
@@ -1051,181 +971,9 @@ namespace SinobigamiBot
         /// <returns></returns>
         private bool ExistsUserInfoFile(Server server)
         {
-            return System.IO.File.Exists($"./{server.Id}.txt");
+            return System.IO.File.Exists($"{serverDataFolder}/{server.Id}.txt");
         }
 
-        /// <summary>
-        /// UserInfoを保存する
-        /// </summary>
-        private void SaveUserInfo(Server server)
-        {
-            var sw = new System.IO.StreamWriter($"./{server.Id}.txt");
-            foreach (var user in UserInfos)
-            {
-                sw.WriteLine("[User]");
-                sw.WriteLine($"Name={user.User.Name}");
-                sw.WriteLine($"Id={user.User.Id}");
-                sw.WriteLine($"XY={user.Point.X},{user.Point.Y}");
-                foreach (var userAndEmo in user.Emotions)
-                {
-                    sw.WriteLine($"Emotion={userAndEmo.Key.Id},{userAndEmo.Value.ToString()}");
-                }
-                foreach (var secrets in user.Secrets)
-                {
-                    sw.WriteLine($"Secret={secrets.ToCSV()}");
-                }
-                sw.WriteLine("[UserEnd]");
-            }
-
-            sw.Close();
-        }
-
-        private List<UserInfo> LoadUserInfo(MessageEventArgs e)
-        {
-            var result = new List<UserInfo>();
-            var lines = System.IO.File.ReadLines($"./{e.Server.Id}.txt");
-            User nowUser = null;
-            Point nowPoint = new Point(0, 0);
-            var nowEmotions = new Dictionary<User, Emotion>();
-            var nowSecrets = new List<Secret>();
-
-            bool skipToNextUser = false;
-            foreach (var line in lines)
-            {
-                if (line.Trim() == "[User]")
-                {
-                    nowPoint = new Point(0, 0);
-                    nowEmotions = new Dictionary<User, Emotion>();
-                    nowSecrets = new List<Secret>();
-                    nowUser = null;
-                    skipToNextUser = false;
-                    continue;
-                }
-                if (skipToNextUser)
-                    continue;
-                if (line.Trim() == "[UserEnd]")
-                {
-                    if (nowUser == null) continue;
-                    result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets));
-                    continue;
-                }
-
-                var splited = line.Split('=').ToArray();
-                if (splited.Length < 2)
-                    continue;
-                string key = splited[0], value = splited[1];
-                switch (key)
-                {
-                    case "Id":
-                        ulong id = ulong.Parse(value);
-                        nowUser = e.Server.Users.First(u => u.Id == id);
-                        if (nowUser == null)
-                            skipToNextUser = true;
-                        break;
-                    case "XY":
-                        var xy = value.Split(',').Select(a => int.Parse(a)).ToArray();
-                        nowPoint = new Point(xy[0], xy[1]);
-                        break;
-                    case "Emotion":
-                        var idAndEmo = value.Split(',');
-                        ulong toId = ulong.Parse(idAndEmo[0]);
-                        Emotion emo = new Emotion(idAndEmo[1], Emotion.ParseEmotionType(idAndEmo[2]));
-                        User toUser = e.Server.Users.First(u => u.Id == toId);
-                        if (toUser == null)
-                            continue;
-                        nowEmotions.Add(toUser, emo);
-                        break;
-                    case "Secret":
-                        nowSecrets.Add(Secret.FromCSV(value));
-                        break;
-                    default:
-                        break;
-                }
-            }
-            return result;
-        }
-
-        /// <summary>
-        /// Plotsを空にして、過去ログにしまう
-        /// </summary>
-        private void ResetPlot()
-        {
-            OldPlots.Add(Plots);
-            Plots = new Dictionary<User, List<int>>();
-        }
-
-        /// <summary>
-        /// プロット値を表に整形
-        /// </summary>
-        /// <returns></returns>
-        private string ResharpPlot()
-        {
-            string text = "";
-            // プロットごとに振り分ける
-            List<List<string>> plots = new List<List<string>>();
-            for (int i = 0; i < 6; i++)
-                plots.Add(new List<string>());
-
-            foreach (User user in Plots.Keys)
-            {
-                foreach (int p in Plots[user])
-                {
-                    plots[p - 1].Add(user.Name);
-                }
-            }
-            // そのプロットでの最大の文字列のユーザー名
-            int[] maxs = new int[6];
-            for (int i = 0; i < 6; i++)
-            {
-                int maxLen = 3;
-                foreach (var name in plots[i])
-                {
-                    if (name.Length > maxLen)
-                        maxLen = name.Length;
-                }
-                maxs[i] = maxLen;
-            }
-            // 先頭行
-            for (int i = 0; i < 6; i++)
-            {
-                text += ToCenter(ToWide((i + 1).ToString()), maxs[i]) + "|";
-            }
-            text += "\n";
-            // ユーザーの行
-            while (true)
-            {
-                bool flag = false;
-                for (int i = 0; i < 6; i++)
-                {
-                    if (plots[i].Count != 0)
-                    {
-                        flag = true;
-                        var username = ToCenter(ToWide(Pop(plots[i])), maxs[i]);
-                        text += username + "|";
-                    }
-                    else
-                    {
-                        text += ToCenter("　", maxs[i]) + "|";
-                    }
-                }
-                text += "\n";
-                if (!flag) break;
-            }
-            return text;
-        }
-
-        /// <summary>
-        /// 先頭のアイテムをポップ（返して削除）
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="list"></param>
-        /// <returns></returns>
-        public static T Pop<T>(List<T> list)
-        {
-            var res = list[0];
-            list.RemoveAt(0);
-            return res;
-        }
 
 
         /// <summary>

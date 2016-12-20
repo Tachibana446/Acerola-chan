@@ -21,6 +21,8 @@ namespace SinobigamiBot
 
         public System.Drawing.SizeF StringSize { get; set; }
 
+        public string Name { get { return User.Name; } }
+
         public UserInfo(User user)
         {
             User = user;
