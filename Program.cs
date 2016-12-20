@@ -65,6 +65,10 @@ namespace SinobigamiBot
             {
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
+                // 参加者のリスト
+                client.MessageReceived += async (s, e) => await PlayersList(e);
+                // 参加者の再設定
+                client.MessageReceived += async (s, e) => await ResetPlayersOrder(e);
                 // Reload Users
                 client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
                 // Send Relation
@@ -146,7 +150,6 @@ namespace SinobigamiBot
                     // users = GetServerUsers(e.Server,true,true);
                     foreach (var user in users)
                     {
-                        // TODO: botとGMを省く
                         UserInfos.Add(new UserInfo(user));
                     }
                 }
@@ -168,6 +171,66 @@ namespace SinobigamiBot
                 Serifs.AddRange(System.IO.File.ReadLines("serif/lucky.txt"));
             Serifs.RemoveAll(s => s == "");
             completedInitialize = true;
+        }
+
+        /// <summary>
+        /// 参加者（PL)の指定
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task ResetPlayersOrder(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !e.Message.IsMentioningMe()) return;
+            var match = Regex.Match(e.Message.Text.Replace('　', ' '), @"参加者の?リセット(.*)");
+            if (!match.Success) return;
+            if (match.Groups[1].Value == "")
+            {
+                await e.Channel.SendMessage(e.User.Mention + " ユーザー名をスペース区切りで指定してね！");
+                return;
+            }
+            var users = e.Server.Users;
+            var userInfos = new List<UserInfo>();
+            var usernames = match.Groups[1].Value.Split(' ').Select(s => s.Trim()).ToList();
+            foreach (var name in usernames)
+            {
+                if (name == "") continue;
+                bool fullMatch = false;
+                List<UserInfo> imcompleteMatchs = new List<UserInfo>();
+                foreach (var user in users)
+                {
+                    if (isMatchUserNameOrNick(user, name))
+                    {
+                        userInfos.Add(new UserInfo(user));
+                        fullMatch = true;
+                    }
+
+                    if (!fullMatch)
+                    {
+                        if ((user.Nickname != null && Regex.IsMatch(user.Nickname, name)) || Regex.IsMatch(user.Name, name))
+                            imcompleteMatchs.Add(new UserInfo(user));
+                    }
+                }
+                if (imcompleteMatchs.Count >= 2)
+                {
+                    string imcompletes = string.Join(",", imcompleteMatchs.Select(u => u.NickOrName()));
+                    await e.Channel.SendMessage($"{e.User.Mention} ***エラー***:{name}にマッチするユーザーが{imcompleteMatchs.Count}人いるよ？({imcompletes})");
+                    return;
+                }
+                if (imcompleteMatchs.Count == 1)
+                    userInfos.Add(imcompleteMatchs[0]);
+            }
+            // TODO サーバーファイルのバックアップ
+            UserInfos = userInfos.Distinct().ToList();
+            SaveUserInfo(e.Server);
+            var text = string.Join(",", UserInfos.Select(u => u.NickOrName()));
+            await e.Channel.SendMessage($"{text} を参加者として登録したよ！（ただしこれまでのデータは破棄されました）");
+        }
+
+        private async Task PlayersList(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor || !Regex.IsMatch(e.Message.Text, @"参加者の?リスト")) return;
+            var users = string.Join("\n", UserInfos.Select(u => u.NickOrName()));
+            await e.Channel.SendMessage($"参加者：\n{users}");
         }
 
         private async Task SendAudio(MessageEventArgs e)
@@ -409,13 +472,13 @@ namespace SinobigamiBot
             if (target != null)
             {
                 uinfo.AddSecret(target.User);
-                targetname = target.NameOrNick();
+                targetname = target.NickOrName();
             }
             else
             {
                 uinfo.AddSecret(arg);
             }
-            var name = uinfo.NameOrNick();
+            var name = uinfo.NickOrName();
 
             await e.Channel.SendMessage($"{name} は {targetname}の秘密を 手に入れた！");
             SaveUserInfo(e.Server);
@@ -453,7 +516,7 @@ namespace SinobigamiBot
             }
             foreach (var u in users)
                 u.AddSecret(secret);
-            await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NameOrNick()))} は {secret} の秘密を 得た！");
+            await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NickOrName()))} は {secret} の秘密を 得た！");
             SaveUserInfo(e.Server);
         }
 
@@ -468,7 +531,7 @@ namespace SinobigamiBot
             if (!Regex.IsMatch(e.Message.Text, @"秘密一覧")) return;
             var user = UserInfos.Find(u => u.User.Id == e.User.Id);
 
-            var username = user.NameOrNick();
+            var username = user.NickOrName();
             var text = "";
             foreach (var secret in user.Secrets)
             {
@@ -1221,6 +1284,22 @@ namespace SinobigamiBot
             result += input;
             for (int i = 0; i < right; i++) result += pad;
             return result;
+        }
+
+        /// <summary>
+        /// ニックネームがあればそれを、なければユーザー名を返す
+        /// </summary>
+        /// <param name="user"></param>
+        /// <returns></returns>
+        private string NickOrName(User user)
+        {
+            return user.Nickname != null ? user.Nickname : user.Name;
+        }
+
+        private bool isMatchUserNameOrNick(User user, string name)
+        {
+            if (user.Nickname != null && user.Nickname == name) return true;
+            return user.Name == name;
         }
     }
 }

@@ -39,7 +39,7 @@ namespace SinobigamiBot
             Secrets = secrets;
         }
 
-        public string NameOrNick()
+        public string NickOrName()
         {
             return User.Nickname != null ? User.Nickname : User.Name;
         }
