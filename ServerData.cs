@@ -171,6 +171,7 @@ namespace SinobigamiBot
                 {
                     sw.WriteLine($"Secret={secrets.ToCSV()}");
                 }
+                sw.WriteLine($"Status={user.StatusToCSV()}");
                 sw.WriteLine("[UserEnd]");
             }
 
@@ -188,6 +189,7 @@ namespace SinobigamiBot
             Point nowPoint = new Point(0, 0);
             var nowEmotions = new Dictionary<User, Emotion>();
             var nowSecrets = new List<Secret>();
+            var nowStatus = new Dictionary<string, object>();
 
             bool skipToNextUser = false;
             foreach (var line in lines)
@@ -197,6 +199,7 @@ namespace SinobigamiBot
                     nowPoint = new Point(0, 0);
                     nowEmotions = new Dictionary<User, Emotion>();
                     nowSecrets = new List<Secret>();
+                    nowStatus = new Dictionary<string, object>();
                     nowUser = null;
                     skipToNextUser = false;
                     continue;
@@ -206,7 +209,7 @@ namespace SinobigamiBot
                 if (line.Trim() == "[UserEnd]")
                 {
                     if (nowUser == null) continue;
-                    result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets));
+                    result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets, nowStatus));
                     continue;
                 }
 
@@ -238,9 +241,13 @@ namespace SinobigamiBot
                     case "Secret":
                         nowSecrets.Add(Secret.FromCSV(value));
                         break;
+                    case "Status":
+                        nowStatus = UserInfo.StatusFormCSV(line.Substring("Status=".Length));
+                        break;
                     default:
                         break;
                 }
+
             }
             Players = result;
         }

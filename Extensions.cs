@@ -53,6 +53,9 @@ namespace SinobigamiBot
             return result;
         }
 
+        static string wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ＝＋！”＃＄％＆’（）";
+        static string narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ=+!\"#$%&'()";
+
 
         /// <summary>
         /// 全角英数字を半角に
@@ -61,8 +64,6 @@ namespace SinobigamiBot
         /// <returns></returns>
         public static string ToNarrow(this string input)
         {
-            var wide = "　１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
-            var narrow = " 1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
 
             string output = "";
             foreach (var c in input)
@@ -78,9 +79,6 @@ namespace SinobigamiBot
 
         public static string ToWide(this string input)
         {
-            var wide = "１２３４５６７８９０－ａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺ　";
-            var narrow = "1234567890-abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ";
-
             string output = "";
             foreach (var c in input)
             {

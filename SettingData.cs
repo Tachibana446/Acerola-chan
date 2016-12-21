@@ -21,6 +21,19 @@ namespace SinobigamiBot
         public string Token { get; private set; }
         public string ClientId { get; private set; }
 
+        /// <summary>
+        /// 体力の初期値
+        /// </summary>
+        public int DefaultHP
+        {
+            get
+            {
+                if (!Data.Keys.Contains(nameof(DefaultHP))) return 6;
+                return int.Parse(Data[nameof(DefaultHP)]);
+            }
+            set { Data[nameof(DefaultHP)] = value.ToString(); }
+        }
+
         public SettingData()
         {
             Load();
