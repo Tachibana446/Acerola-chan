@@ -6,12 +6,12 @@ using System.Threading.Tasks;
 
 namespace SinobigamiBot
 {
-    enum EmotionType
+    public enum EmotionType
     {
         plus, minus
     }
 
-    class Emotion
+    public class Emotion
     {
         public string Name { get; private set; }
         public EmotionType Type { get; private set; }

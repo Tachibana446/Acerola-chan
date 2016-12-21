@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace SinobigamiBot
 {
-    class UserInfo
+    public class UserInfo
     {
         public User User { get; private set; }
         /// <summary>
@@ -152,7 +152,7 @@ namespace SinobigamiBot
             return result;
         }
 
-        private static object ParseStatus(string str)
+        public static object ParseStatus(string str)
         {
             if (Regex.IsMatch(str, "(T|t)rue")) return true;
             if (Regex.IsMatch(str, "(F|f)alse")) return false;

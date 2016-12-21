@@ -9,7 +9,7 @@ using System.Drawing;
 
 namespace SinobigamiBot
 {
-    class ServerData
+    public class ServerData
     {
         public Server Server { get; set; }
 

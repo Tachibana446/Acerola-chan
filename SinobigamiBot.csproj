@@ -100,6 +100,7 @@
     <Compile Include="ServerData.cs" />
     <Compile Include="SettingData.cs" />
     <Compile Include="Settings.cs" />
+    <Compile Include="StatusCommand.cs" />
     <Compile Include="UserInfo.cs" />
     <Compile Include="VoiceSample.cs" />
   </ItemGroup>

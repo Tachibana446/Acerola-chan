@@ -91,5 +91,19 @@ namespace SinobigamiBot
             return output;
         }
 
+        public static bool IsInt(this object obj)
+        {
+            return obj.GetType() == typeof(int);
+        }
+
+        public static bool IsString(this object obj)
+        {
+            return obj.GetType() == typeof(string);
+        }
+
+        public static bool IsBool(this object obj)
+        {
+            return obj.GetType() == typeof(bool);
+        }
     }
 }

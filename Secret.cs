@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace SinobigamiBot
 {
-    class Secret
+    public class Secret
     {
         public string Name { get; set; }
         public Color Color { get; set; } = Color.Black;

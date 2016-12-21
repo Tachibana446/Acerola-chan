@@ -207,120 +207,15 @@ namespace SinobigamiBot
         private async Task SetStatus(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            // ヘルプ
-            if (Regex.IsMatch(e.Message.Text.ToNarrow(), @"#ステータス\s+(help|usage)"))
-            {
-                await e.Channel.SendMessage(string.Join("\n", System.IO.File.ReadLines(statusUsageFilePath)));
-                return;
-            }
-            var text = e.Message.Text.ToNarrow();
-            var match = Regex.Match(text, @"#ステータス\s+(.*?)\s+(.*)");
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#ステータス\s(.*)");
             if (!match.Success) return;
-            var server = GetServer(e);
-            UserInfo user = null;
-            try
-            {
-                user = server.GetMatchPlayer(match.Groups[1].Value.Trim());
-            }
-            catch (Exception exc)
-            {
-                await e.Channel.SendMessage(e.User.Mention + " " + exc.Message);
-                return;
-            }
-            if (user == null)
-            {
-                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value}にマッチするユーザーはいないよ？");
-                return;
-            }
 
-            var str = match.Groups[2].Value;
-            match = Regex.Match(str, @"(.+)(\+=|-=)(.+)");
-            if (match.Success) // += / -=
-            {
-                string key = match.Groups[1].Value.Trim();
-                string operation = match.Groups[2].Value;
-                string value = match.Groups[3].Value.Trim();
-                if (!user.Status.Keys.Contains(key))
-                {
-                    await e.Channel.SendMessage(e.User.Mention + $" {key}というステータスはないよ");
-                    return;
-                }
-                var val = user.Status[key];
-                if (val.GetType() == typeof(int))
-                {
-                    int v = 0;
-                    try
-                    {
-                        v = int.Parse(value);
-                        if (operation == "-=") v *= -1;
-                    }
-                    catch (Exception ex)
-                    {
-                        await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
-                        return;
-                    }
-                    user.Status[key] = int.Parse(user.Status[key].ToString()) + v;
-                }
-                else if (val.GetType() == typeof(string) && operation == "+=")
-                {
-                    user.Status[key] = val.ToString() + value;
-                }
-                else if (val.GetType() == typeof(string))
-                {
-                    await e.Channel.SendMessage(e.User.Mention + $"stringに-は使えないよ(｡>д<｡)");
-                    return;
-                }
-                else
-                {
-                    await e.Channel.SendMessage(e.User.Mention + $" {val.GetType().ToString()}型に{operation}は使えないよ。(｡>д<｡)");
-                    return;
-                }
-                await e.Channel.SendMessage(e.User.Mention + $" {key}を{user.Status[key]}に設定したよ ");
-                return;
-            }
-            else
-            {
-                match = Regex.Match(str, @"(.+)(\+\+|--)");
-                if (match.Success) // ++ / --
-                {
-                    string key = match.Groups[1].Value.Trim();
-                    string operation = match.Groups[2].Value;
-                    var message = "";
-                    if (!user.Status.Keys.Contains(key)) { message = $"{key}というステータスはないよ(｡>﹏<｡)"; }
-                    else if (user.Status[key].GetType() != typeof(int)) { message = $"{key}は{user.Status[key].GetType().ToString()}型だよ(・ε・` )"; }
-                    else
-                    {
-                        int add = (operation == "++") ? 1 : -1;
-                        user.Status[key] = int.Parse(user.Status[key].ToString()) + add;
-                        message = $"{key}を{user.Status[key].ToString()}に設定したよ";
-                    }
-                    await e.Channel.SendMessage(e.User.Mention + " " + message);
-                    return;
-                }
-                else if (Regex.IsMatch(str, @".+=.+")) // key = value
-                {
-                    var sp = str.Split('=').Select(s => s.Trim()).ToArray();
-                    if (sp.Length != 2)
-                    {
-                        await e.Channel.SendMessage(e.User.Mention + " 第２引数はkey=valueの形式で与えてね(｡>﹏<｡)");
-                        return;
-                    }
-                    user.SetStatus(sp[0], sp[1]);
-                    await e.Channel.SendMessage(e.User.Mention + $" {sp[0]}を{sp[1]}に設定したよ");
-                }
-                else if (Regex.IsMatch(str, @"(.+)\s+削除"))
-                {
-                    var key = Regex.Match(str, @"(.+)\s+削除").Groups[1].Value.Trim();
-                    string message = "";
-                    if (!user.Status.Keys.Contains(key)) message = $"{key}というステータスは存在しないよ٩(๑´0`๑)۶";
-                    else
-                    {
-                        user.Status.Remove(key);
-                        message = $"{key}を削除したよ";
-                    }
-                    await e.Channel.SendMessage(e.User.Mention + " " + message);
-                }
-            }
+            var server = GetServer(e);
+            string argText = match.Groups[1].Value;
+            var command = new StatusCommand(server);
+            string result = command.ExcuteWithKaomoji(argText);
+            await e.Channel.SendMessage(e.User.Mention + " " + result);
+
             server.SavePlayersInfo();
         }
 
