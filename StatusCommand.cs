@@ -31,6 +31,7 @@ namespace SinobigamiBot
         public string ExcuteWithKaomoji(string argText)
         {
             string result = Excute(argText);
+            Server.SavePlayersInfo();
             bool success = false;
             if (Regex.IsMatch(result, @"設定したよ|削除したよ"))
                 success = true;
@@ -49,7 +50,7 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="argText"></param>
         /// <returns></returns>
-        public string Excute(string argText)
+        private string Excute(string argText)
         {
             var args = argText.ToNarrow().Trim().Split(' ').ToList();
             args.RemoveAll(s => s == "");

@@ -17,12 +17,21 @@ namespace SinobigamiBot
         public List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
 
         public List<UserInfo> Players { get; set; } = new List<UserInfo>();
+        public List<UserInfo> AllUsers { get; set; } = new List<UserInfo>();
 
         public bool isInitialized = false;
 
         public ServerData(Server server)
         {
             Server = server;
+            foreach (var user in Server.Users)
+            {
+                AllUsers.Add(new UserInfo(user));
+                if (!user.IsBot)
+                    Players.Add(new UserInfo(user));
+            }
+            if (ExistsUserInfoFile(Server)) LoadPlayersInfo();
+            isInitialized = true;
         }
 
         /// <summary>
@@ -277,5 +286,42 @@ namespace SinobigamiBot
             else
                 throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName()))}");
         }
+
+        /// <summary>
+        /// パターンにマッチするユーザーを返す
+        /// </summary>
+        /// <param name="pattern"></param>
+        /// <returns></returns>
+        public UserInfo GetMatchUser(string pattern)
+        {
+            foreach (var user in AllUsers)
+            {
+                if (user.NickOrName() == pattern || user.Name == pattern)
+                    return user;
+            }
+            var matchList = new List<UserInfo>();
+            foreach (var user in AllUsers)
+            {
+                if (Regex.IsMatch(user.NickOrName(), pattern) || Regex.IsMatch(user.Name, pattern))
+                    matchList.Add(user);
+            }
+            if (matchList.Count == 0)
+                return null;
+            else if (matchList.Count == 1)
+                return matchList.First();
+            else
+                throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName()))}");
+        }
+
+        /// <summary>
+        /// UserInfoの保存ファイルがあるかどうか
+        /// </summary>
+        /// <param name="server"></param>
+        /// <returns></returns>
+        private bool ExistsUserInfoFile(Server server)
+        {
+            return System.IO.File.Exists($"{Program.serverDataFolder}/{server.Id}.txt");
+        }
+
     }
 }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SinobigamiBot
 {
-    class SettingData
+    public class SettingData
     {
         public bool PlayDiceSE = true;
         /// <summary>
@@ -32,6 +32,28 @@ namespace SinobigamiBot
                 return int.Parse(Data[nameof(DefaultHP)]);
             }
             set { Data[nameof(DefaultHP)] = value.ToString(); }
+        }
+
+        public string YomiagePath
+        {
+            get { return (string)GetData("yomiage", "./data/yomiage/softalkw.exe"); }
+            set { SetData("yomiage", value); }
+        }
+        /// <summary>
+        /// メッセージが来た時クライアントで読み上げるかどうか
+        /// </summary>
+        public bool IsYomiageMessage
+        {
+            get { return (bool)GetData(nameof(IsYomiageMessage), false); }
+            set { SetData(nameof(IsYomiageMessage), value); }
+        }
+        /// <summary>
+        /// メッセージを読み上げないユーザーのリスト
+        /// </summary>
+        public List<string> YomiageIgnoreUsers
+        {
+            get { return GetData(nameof(YomiageIgnoreUsers), "").ToString().Split(',').ToList(); }
+            set { SetData(nameof(IsYomiageMessage), string.Join(",", value)); }
         }
 
         public SettingData()
@@ -73,6 +95,36 @@ namespace SinobigamiBot
             if (Data.Keys.Contains(nameof(Token))) Token = Data[nameof(Token)];
             if (Data.Keys.Contains(nameof(ClientId))) ClientId = Data[nameof(ClientId)];
 
+        }
+
+        /// <summary>
+        /// Dataからデータを取得
+        /// 無かった時のデフォルト値と、その時デフォルト値をファイルに保存するか
+        /// </summary>
+        /// <param name="key"></param>
+        /// <param name="_default"></param>
+        /// <param name="writeOnDefault">キーが無かった時デフォルト値をファイルに保存するか</param>
+        /// <returns></returns>
+        private object GetData(string key, object _default, bool writeOnDefault = true)
+        {
+            if (Data.Keys.Contains(key))
+            {
+                return UserInfo.ParseStatus(Data[key]);
+            }
+            else
+            {
+                if (writeOnDefault) SetData(key, _default);
+                return _default;
+            }
+        }
+
+        private void SetData(string key, object value)
+        {
+            if (Data.Keys.Contains(key))
+                Data[key] = value.ToString();
+            else
+                Data.Add(key, value.ToString());
+            Save();
         }
     }
 }

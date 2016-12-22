@@ -103,6 +103,7 @@
     <Compile Include="StatusCommand.cs" />
     <Compile Include="UserInfo.cs" />
     <Compile Include="VoiceSample.cs" />
+    <Compile Include="Yomiage.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

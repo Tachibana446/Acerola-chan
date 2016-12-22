@@ -34,6 +34,10 @@ namespace SinobigamiBot
         /// セリフ
         /// </summary>
         List<string> Serifs = new List<string>();
+        /// <summary>
+        /// 読み上げてくれるやつ
+        /// </summary>
+        Yomiage yomi;
 
         const string serifFolder = "./data/serif";
         const string serifFilePath = serifFolder + "/serif.txt";
@@ -64,10 +68,13 @@ namespace SinobigamiBot
 
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
+            yomi = new Yomiage(setting);
             try
             {
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
+                // 読み上げ
+                client.MessageReceived += (s, e) => MessageYomiage(e);
                 // 参加者のリスト
                 client.MessageReceived += async (s, e) => await PlayersList(e);
                 // 参加者の再設定
@@ -137,6 +144,34 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// メッセージを読み上げる
+        /// </summary>
+        /// <param name="e"></param>
+        private void MessageYomiage(MessageEventArgs e)
+        {
+            if (e.User.IsBot) return;
+            if (!setting.IsYomiageMessage) return;
+            var server = GetServer(e);
+            var uinfo = new UserInfo(e.User);
+            // Ignore処理
+            foreach (var pattern in setting.YomiageIgnoreUsers)
+            {
+                UserInfo u;
+                try
+                {
+                    u = server.GetMatchUser(pattern);
+                }
+                catch
+                {
+                    continue;
+                }
+                if (u != null && e.User.Id == u.User.Id)
+                    return;
+            }
+            yomi.Speak($"{uinfo.NickOrName()}\n{e.Message.Text}");
+        }
+
+        /// <summary>
         /// セリフの読み込みなど
         /// </summary>
         private void InitializeBot()
@@ -168,23 +203,6 @@ namespace SinobigamiBot
                 server = new ServerData(e.Server);
                 ServerDatas.Add(server);
             }
-
-            if (server.isInitialized)
-                return;
-            if (ExistsUserInfoFile(e.Server))
-            {
-                server.LoadPlayersInfo();
-            }
-            else
-            {
-                var users = GetServerUsers(e.Server, true);
-                foreach (var user in users)
-                {
-                    server.Players.Add(new UserInfo(user));
-                }
-            }
-
-            server.isInitialized = true;
         }
 
         /// <summary>
