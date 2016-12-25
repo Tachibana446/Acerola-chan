@@ -58,7 +58,7 @@ namespace SinobigamiBot
             if (args.Count == 0) return "引数を指定してね";
 
             // 第一引数がヘルプ
-            if (args[0] == "help" || args[0] == "usage")
+            if (args[0] == "help" || args[0] == "usage" || args[0] == "ヘルプ")
             {
                 return Help();
             }
