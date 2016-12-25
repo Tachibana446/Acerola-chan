@@ -262,6 +262,26 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// いなければ例外
+        /// </summary>
+        /// <param name="user"></param>
+        /// <returns></returns>
+        public UserInfo GetPlayer(User user)
+        {
+            UserInfo result = null;
+            foreach (var u in Players)
+            {
+                if (u.User.Id == user.Id)
+                { result = u; break; }
+            }
+            if (result == null)
+            {
+                throw new Exception($"{user.Name}はプレイヤーじゃないよ");
+            }
+            return result;
+        }
+
+        /// <summary>
         /// パターンにマッチするプレイヤーを返す
         /// </summary>
         /// <param name="pattern"></param>

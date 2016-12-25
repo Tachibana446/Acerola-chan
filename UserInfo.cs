@@ -27,6 +27,10 @@ namespace SinobigamiBot
         public int Hp = Program.setting.DefaultHP;
 
         public Dictionary<string, object> Status { get; set; } = new Dictionary<string, object>();
+        /// <summary>
+        /// 接近戦ダメージで出目がかぶった数
+        /// </summary>
+        public int OverlapDamageCount = 0;
 
         public UserInfo(User user)
         {
@@ -44,7 +48,7 @@ namespace SinobigamiBot
         /// ステータスを文字列にして返す
         /// </summary>
         /// <returns></returns>
-        public string UserStatus(bool useEmoji = false)
+        public string UserStatus(bool useEmoji = true)
         {
             var text = "──***" + NickOrName() + "***──\n";
             List<string> boolKeys = new List<string>(),
@@ -127,6 +131,32 @@ namespace SinobigamiBot
             var value = ParseStatus(data);
             if (Status.Keys.Contains(key)) Status[key] = value;
             else Status.Add(key, value);
+        }
+
+        /// <summary>
+        /// キーがなければNull
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public object GetStatus(string key)
+        {
+            if (Status.Keys.Contains(key)) return Status[key];
+            else return null;
+        }
+        /// <summary>
+        /// 現在生きているステータス（忍術とか体術とか）を返す
+        /// </summary>
+        /// <returns></returns>
+        public string GetLiveStatus()
+        {
+            var list = new List<string>();
+            foreach (var key in Program.SinobigamiStatus)
+            {
+                var val = GetStatus(key);
+                if (val != null && val.IsBool() && (bool)val)
+                    list.Add(key);
+            }
+            return string.Join(",", list);
         }
 
         public string StatusToCSV()

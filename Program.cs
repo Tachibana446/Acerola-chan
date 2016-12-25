@@ -39,6 +39,8 @@ namespace SinobigamiBot
         /// </summary>
         Yomiage yomi;
 
+        public static string[] SinobigamiStatus = new string[] { "器術", "体術", "忍術", "謀術", "戦術", "妖術" };
+
         const string serifFolder = "./data/serif";
         const string serifFilePath = serifFolder + "/serif.txt";
         const string luckySerifFilePath = serifFolder + "/lucky.txt";
@@ -74,7 +76,12 @@ namespace SinobigamiBot
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
                 // 読み上げ
-                client.MessageReceived += (s, e) => MessageYomiage(e);
+                client.MessageReceived += async (s, e) => await MessageYomiage(e);
+                // ダメージ
+                client.MessageReceived += async (s, e) => await CloseBattleDamageCommand(e);
+                client.MessageReceived += async (s, e) => await SelectOverlapDamage(e);
+                client.MessageReceived += async (s, e) => await DamageOrHeal(e);
+                client.MessageReceived += async (s, e) => await HealAll(e);
                 // 参加者のリスト
                 client.MessageReceived += async (s, e) => await PlayersList(e);
                 // 参加者の再設定
@@ -144,10 +151,203 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// 接近戦ダメージ
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task CloseBattleDamageCommand(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = e.Message.Text.ToNarrow();
+            var match = Regex.Match(text, @"#接近戦ダメージ\s+(.+)\s(\d+)");
+            if (!match.Success) return;
+            var server = GetServer(e);
+            UserInfo user = null;
+            try
+            {
+                user = server.GetMatchPlayer(match.Groups[1].Value);
+            }
+            catch (Exception exc)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + exc.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value}にマッチするユーザーはいないよ");
+                return;
+            }
+            int n = int.Parse(match.Groups[2].Value);
+            var statuses = SinobigamiStatus.ToList();
+            var damaged = new List<string>();
+            var overlaped = new List<string>();
+            user.OverlapDamageCount = 0;
+            var alive = user.GetLiveStatus().Split(',');
+            if (alive.Length <= n)
+            {
+                foreach (var s in alive)
+                {
+                    user.SetStatus(s, "False");
+                    damaged.Add(s);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    var s = statuses.Sample();
+                    if ((bool)user.GetStatus(s) == false)
+                    {
+                        overlaped.Add(s);
+                        user.OverlapDamageCount += 1;
+                    }
+                    else
+                    {
+                        user.SetStatus(s, "False");
+                        damaged.Add(s);
+                    }
+                }
+            }
+            if (damaged.Count != 0)
+                await e.Channel.SendMessage($"{user.NickOrName()}の{string.Join(",", damaged)}を:x:にしたよ");
+            if (user.OverlapDamageCount != 0)
+                await e.Channel.SendMessage($"{user.User.Mention} {string.Join(",", overlaped)}が被ったので好きな能力を選択してダメージを受けてね({user.GetLiveStatus()}の中から{user.OverlapDamageCount}個)");
+            server.SavePlayersInfo();
+        }
+        /// <summary>
+        /// 接近戦ダメージでかぶった時選択する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SelectOverlapDamage(MessageEventArgs e)
+        {
+            var server = GetServer(e);
+            UserInfo user = null;
+            try { user = server.GetPlayer(e.User); }
+            catch { return; }
+            if (user.OverlapDamageCount == 0) return;
+            string text = e.Message.Text.ToNarrow();
+            var sinobigamiStatus = SinobigamiStatus.ToList();
+            var statuses = new List<string>();
+            foreach (var status in text.Split(' ').Select(s => s.Trim()))
+            {
+                int index = sinobigamiStatus.IndexOf(status);
+                if (index == -1) return;
+                if (!statuses.Contains(status))
+                {
+                    statuses.Add(status);
+                }
+                else
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $"{status}がかぶってるよ");
+                    return;
+                }
+            }
+            foreach (var status in statuses)
+            {
+                user.SetStatus(status, "False");
+            }
+            await e.Channel.SendMessage(e.User.Mention + " " + string.Join(",", statuses) + "を:x:にしたよ ");
+            await e.Channel.SendMessage(user.UserStatus());
+            user.OverlapDamageCount = 0;
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// 自由に選択してダメージを受ける
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task DamageOrHeal(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#(ダメージ|回復)(.*)");
+            if (!match.Success) return;
+            if (match.Groups[2].Value == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にユーザー名と受けるダメージのスロットを書いてね"); return; }
+            var args = match.Groups[2].Value.Split(' ').Select(s => s.Trim()).ToList();
+            args.RemoveAll(s => s == "");
+            var server = GetServer(e);
+            UserInfo user = null;
+            try { user = server.GetMatchPlayer(args[0]); }
+            catch (Exception ex)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {args[0]}にマッチするユーザーはいないよ");
+                return;
+            }
+            args.RemoveAt(0);
+            if (args.Count == 0)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 回復/ダメージを受けるステータスをスペース区切りで入力してね");
+                return;
+            }
+            bool heal = match.Groups[1].Value == "回復";
+            foreach (var status in args)
+            {
+                if (!SinobigamiStatus.Contains(status))
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $" {status}はステータスじゃないよ({string.Join(",", SinobigamiStatus)}から選んでね)");
+                    return;
+                }
+                if (heal)
+                    user.SetStatus(status, "True");
+                else
+                    user.SetStatus(status, "False");
+            }
+            var oORx = heal ? ":o:" : ":x:";
+            await e.Channel.SendMessage($"{user.NickOrName()}の{string.Join(",", args)}を{oORx}にしたよ");
+            await e.Channel.SendMessage(user.UserStatus());
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// 全回復
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task HealAll(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var server = GetServer(e);
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#全回復\s+(.*)");
+            if (!match.Success) return;
+            if (match.Groups[1].Value == "")
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 引数にユーザー名を与えてね");
+                return;
+            }
+            UserInfo user = null;
+            try { user = server.GetMatchPlayer(match.Groups[1].Value); }
+            catch (Exception ex)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value}にマッチするユーザーはいないよ");
+                return;
+            }
+
+            foreach (var s in SinobigamiStatus)
+            {
+                user.SetStatus(s, "True");
+            }
+            await e.Channel.SendMessage($"{user.NickOrName()}を全回復したよ");
+            await e.Channel.SendMessage(user.UserStatus());
+
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
         /// メッセージを読み上げる
         /// </summary>
         /// <param name="e"></param>
-        private void MessageYomiage(MessageEventArgs e)
+        private async Task MessageYomiage(MessageEventArgs e)
         {
             if (e.User.IsBot) return;
             if (!setting.IsYomiageMessage) return;
@@ -168,7 +368,7 @@ namespace SinobigamiBot
                 if (u != null && e.User.Id == u.User.Id)
                     return;
             }
-            yomi.Speak($"{uinfo.NickOrName()}\n{e.Message.Text}");
+            await yomi.Speak($"{uinfo.NickOrName()}\n{e.Message.Text}");
         }
 
         /// <summary>
