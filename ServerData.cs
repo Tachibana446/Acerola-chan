@@ -42,7 +42,7 @@ namespace SinobigamiBot
         public void SetPlotAgain(User user, List<int> plots)
         {
             if (Plots.Keys.Count == 0 && OldPlots.Count != 0)
-                Plots = OldPlots.First();
+                Plots = OldPlots.Last();
             SetPlot(user, plots);
         }
 
