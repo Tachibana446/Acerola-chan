@@ -71,8 +71,11 @@ namespace SinobigamiBot
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
             yomi = new Yomiage(setting);
+            MakeGraph.SaveMarkDown("hoge|hoge");
             try
             {
+                // DEBUG
+                client.MessageReceived += async (s, e) => await DebugEvent(e);
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
                 // 読み上げ
@@ -89,7 +92,18 @@ namespace SinobigamiBot
                 // Reload Users
                 client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
                 // 関係図を作成し送信
-                client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
+                client.MessageReceived += async (s, e) =>
+                {
+                    try
+                    {
+                        await ShowRelationGraph(e);
+                    }
+                    catch (Exception ex)
+                    {
+                        SaveLog(ex, e);
+                    }
+                };
+
                 // Show Choices Emotion
                 client.MessageReceived += async (s, e) => await SetEmotion(e);
                 // Select Choice
@@ -112,7 +126,11 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await SetStatus(e);
 
                 // Dice roll
-                client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
+                client.MessageReceived += async (s, e) =>
+                {
+                    try { await DiceRollEvent(s, e); }
+                    catch (Exception ex) { SaveLog(ex, e); }
+                };
                 // Dice Rest
                 client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
 
@@ -141,13 +159,33 @@ namespace SinobigamiBot
             }
             catch (Exception exc)
             {
-                var sw = new System.IO.StreamWriter("log.txt");
+                var sw = new System.IO.StreamWriter("log.txt", true);
                 sw.WriteLine($"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}\n{exc}\n{exc.Message}");
                 sw.Close();
             }
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
+        }
+
+        private async Task DebugEvent(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            MakeGraph.SaveMarkDown("|hoge|fuga\npiyo|piyo");
+        }
+
+        private void SaveLog(string message)
+        {
+            var sw = new System.IO.StreamWriter("./log.txt", true);
+            sw.WriteLine($"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}:{DateTime.Now.Second}");
+            sw.WriteLine(message);
+            sw.Close();
+        }
+
+        private void SaveLog(Exception e, MessageEventArgs eArgs)
+        {
+            SaveLog(e.ToString() + "\n" + e.Message);
+            eArgs.Channel.SendMessage(e.Message);
         }
 
         /// <summary>

@@ -49,6 +49,14 @@
       <HintPath>packages\Discord.Net.Modules.0.9.6\lib\net45\Discord.Net.Modules.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="DropNet, Version=1.10.23.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\DropNet.1.10.23.0\lib\net40\DropNet.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Markdown, Version=2.0.0.0, Culture=neutral, PublicKeyToken=1b320cc08ad5aa89, processorArchitecture=MSIL">
+      <HintPath>packages\Markdown.2.2.0\lib\net451\Markdown.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="NAudio, Version=1.7.3.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\NAudio.1.7.3\lib\net35\NAudio.dll</HintPath>
       <Private>True</Private>
@@ -82,12 +90,17 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="WebDriver, Version=3.0.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\Selenium.WebDriver.3.0.1\lib\net40\WebDriver.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="WebSocket4Net, Version=0.14.1.0, Culture=neutral, PublicKeyToken=eb4e154b696bf72a, processorArchitecture=MSIL">
       <HintPath>packages\WebSocket4Net.0.14.1\lib\net45\WebSocket4Net.dll</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Dropbox.cs" />
     <Compile Include="Emotion.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="IniFile.cs" />

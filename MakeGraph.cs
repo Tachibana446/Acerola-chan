@@ -6,6 +6,10 @@ using System.Threading.Tasks;
 using System.Drawing;
 using Discord;
 using System.Drawing.Drawing2D;
+using HeyRed.MarkdownSharp;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using System.IO;
 
 namespace SinobigamiBot
 {
@@ -155,6 +159,24 @@ namespace SinobigamiBot
 
             font.Dispose();
             g.Dispose();
+        }
+
+        public static void SaveMarkDown(string markdown)
+        {
+            var mark = new Markdown();
+            var text = mark.Transform(markdown);
+            var file = new FileInfo("markdown.html");
+            var sw = new System.IO.StreamWriter(file.FullName);
+            sw.WriteLine(text);
+            sw.Close();
+
+            var chrome = new ChromeDriver();
+            var url = $"file:///{file.FullName.Replace('\\', '/')}";
+           
+            chrome.Navigate().GoToUrl(url);
+            var ss = chrome.GetScreenshot();
+            ss.SaveAsFile("./markdown.png", System.Drawing.Imaging.ImageFormat.Png);
+            chrome.Close();
         }
     }
 

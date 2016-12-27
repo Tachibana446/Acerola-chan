@@ -118,7 +118,7 @@ namespace SinobigamiBot
             }
         }
 
-        private void SetData(string key, object value)
+        public void SetData(string key, object value)
         {
             if (Data.Keys.Contains(key))
                 Data[key] = value.ToString();
