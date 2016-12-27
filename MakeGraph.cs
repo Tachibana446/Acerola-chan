@@ -38,6 +38,88 @@ namespace SinobigamiBot
             g2.Dispose();
         }
 
+        public static void MakePlotGraph(ServerData server, string path = "./plot.png")
+        {
+            Bitmap img1 = new Bitmap(100, 100);
+            Graphics g1 = Graphics.FromImage(img1);
+            var plots = new List<List<Tuple<string, SizeF>>>(); // 1 -> [ <name,size>,<name,size> ]
+            for (int i = 0; i < 6; i++)
+                plots.Add(new List<Tuple<string, SizeF>>());
+            List<double> maxWidths = new List<double>(), heights = new List<double>();
+            double maxHeight = 0, allWidth = 0;
+            var num = "壱弐参肆伍陸";
+            Font gyosho = new Font("HG行書体", 24), meiryo = new Font("メイリオ", 24);
+
+            for (int i = 0; i < 6; i++)
+            {
+                var text = num[i].ToString();
+                plots[i].Add(new Tuple<string, SizeF>(text, g1.MeasureString(text, gyosho)));
+            }
+            foreach (var user in server.Plots.Keys)
+                foreach (var p in server.Plots[user])
+                    plots[p].Add(new Tuple<string, SizeF>(user.Name, g1.MeasureString(user.Name, meiryo)));
+
+            foreach (var p in plots)
+            {
+                double max = 72;
+                double height = 0;
+                foreach (var size in p)
+                {
+                    if (size.Item2.Width > max)
+                        max = size.Item2.Width;
+                    height += size.Item2.Height;
+                }
+                height += 2;
+                maxWidths.Add(max);
+                allWidth += max;
+                heights.Add(height);
+            }
+            maxHeight = heights.Max();
+
+            var img2 = new Bitmap((int)allWidth, (int)maxHeight);
+            var g2 = Graphics.FromImage(img2);
+            // 列の色分け
+            float x = 0;
+            for (int i = 0; i < 6; i++)
+            {
+                Brush brush = (i % 2 == 0) ? new SolidBrush(ColorTranslator.FromHtml("#bfbfbf")) : Brushes.White;
+                g2.FillRectangle(brush, new RectangleF(x, 0, (float)maxWidths[i], (float)maxHeight));
+                x += (float)maxWidths[i];
+            }
+            // 文字描画
+            x = 0; float y = 0;
+            for (int i = 0; i < 6; i++)
+            {
+                var pair = plots[i].First();
+                plots[i].Remove(pair);
+                g2.DrawString(pair.Item1, gyosho, Brushes.Black, new PointF((float)(x + maxWidths[i] / 2 - pair.Item2.Width / 2), 0));
+                x += (float)maxWidths[i];
+                if (y < pair.Item2.Height) y = pair.Item2.Height;
+            }
+            Pen pen = new Pen(Brushes.Black, 2);
+            g2.DrawLine(pen, 0, y, (float)allWidth, y);
+            x = 0;
+            float oldY = y;
+            int index = 0;
+            foreach (var list in plots)
+            {
+                y = oldY;
+                foreach (var pair in list)
+                {
+                    float cx = x + (float)(maxWidths[index] / 2) - pair.Item2.Width / 2;
+                    g2.DrawString(pair.Item1, meiryo, Brushes.Black, new PointF(cx, y));
+                    y += pair.Item2.Height;
+                }
+                x += (float)maxWidths[index];
+                index++;
+            }
+
+            img2.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+
+            gyosho.Dispose(); meiryo.Dispose();
+            g1.Dispose(); g2.Dispose();
+        }
+
         public static void MakeRelationGraph(List<UserInfo> users, string path = "./relation.png")
         {
             int fontSize = 15;
@@ -172,7 +254,7 @@ namespace SinobigamiBot
 
             var chrome = new ChromeDriver();
             var url = $"file:///{file.FullName.Replace('\\', '/')}";
-           
+
             chrome.Navigate().GoToUrl(url);
             var ss = chrome.GetScreenshot();
             ss.SaveAsFile("./markdown.png", System.Drawing.Imaging.ImageFormat.Png);

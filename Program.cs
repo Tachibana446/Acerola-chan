@@ -71,11 +71,8 @@ namespace SinobigamiBot
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
             yomi = new Yomiage(setting);
-            MakeGraph.SaveMarkDown("hoge|hoge");
             try
             {
-                // DEBUG
-                client.MessageReceived += async (s, e) => await DebugEvent(e);
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
                 // 読み上げ
@@ -134,6 +131,8 @@ namespace SinobigamiBot
                 // Dice Rest
                 client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
 
+                // プロットのセット
+                client.MessageReceived += async (s, e) => await SetPlotCommand(e);
                 // Set Plot
                 client.MessageReceived += async (s, e) => await SetPlotEvent(e);
                 // Set Plot Again
@@ -167,12 +166,38 @@ namespace SinobigamiBot
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
-
-        private async Task DebugEvent(MessageEventArgs e)
+        /// <summary>
+        /// 他人のプロットをセットする
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetPlotCommand(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            MakeGraph.SaveMarkDown("|hoge|fuga\npiyo|piyo");
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#プロット\s+(.*).*(\d+)(.*)");
+            if (!match.Success) return;
+            var server = GetServer(e);
+            UserInfo user = null;
+            try { user = server.GetMatchPlayer(match.Groups[1].Value.Trim()); }
+            catch (Exception ex) { await e.Channel.SendMessage(e.User.Mention + " " + ex.Message); return; }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value.Trim()   }にマッチするユーザーはいないよ");
+                return;
+            }
+            int plot = int.Parse(match.Groups[2].Value);
+            var match2 = Regex.Match(match.Groups[3].Value, @"and.*(\d+)");
+            if (match2.Success)
+            {
+                server.Plots[user.User] = new int[] { plot, int.Parse(match2.Groups[1].Value) }.ToList();
+            }
+            else
+            {
+                server.Plots[user.User] = new int[] { plot }.ToList();
+            }
+            await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + "未入力：" + server.GetNotYetEnterUsersString());
         }
+
 
         private void SaveLog(string message)
         {
@@ -964,7 +989,7 @@ namespace SinobigamiBot
             if (regex.IsMatch(e.Message.Text))
             {
                 var server = GetServer(e);
-                MakeGraph.MakePlotGraph(server.ResharpPlot(), "./plot.png");
+                MakeGraph.MakePlotGraph(server, "./plot.png");
                 if (setting.ResetPlotOnShow)
                 {
                     server.ResetPlot();
