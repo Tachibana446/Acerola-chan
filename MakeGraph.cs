@@ -120,7 +120,7 @@ namespace SinobigamiBot
             g1.Dispose(); g2.Dispose();
         }
 
-        public static void MakeRelationGraph(List<UserInfo> users, string path = "./relation.png")
+        public static void MakeRelationGraph(List<UserOrNpcInfo> users, string path = "./relation.png")
         {
             int fontSize = 15;
             Font font = new Font("メイリオ", fontSize);
@@ -140,7 +140,7 @@ namespace SinobigamiBot
             {
                 var u = users[i];
 
-                var name = u.User.Nickname != null ? u.User.Nickname : users[i].User.Name;
+                var name = u.NickOrName;
                 var size = g.MeasureString(name, font);
                 u.StringSize = size;
                 double PiI = Math.PI * (i + 1);
@@ -148,8 +148,8 @@ namespace SinobigamiBot
                 int y = (int)Math.Round(r * Math.Sin(2 * PiI / n - Math.PI / 2)) + r + (int)(size.Height / 2);
 
                 var discordColor = new Discord.Color(0, 0, 0);
-                if (u.User.Roles != null && u.User.Roles.Count() > 0)
-                    discordColor = u.User.Roles.First().Color;
+                if (!u.IsNpc && ((UserInfo)u).User.Roles != null && ((UserInfo)u).User.Roles.Count() > 0)
+                    discordColor = ((UserInfo)u).User.Roles.First().Color;
 
                 var color = System.Drawing.Color.FromArgb(discordColor.R, discordColor.G, discordColor.B);
 
@@ -179,7 +179,7 @@ namespace SinobigamiBot
                 }
             }
             // ------------ 線描画 -----------------------
-            var drawn = new List<Tuple<UserInfo, UserInfo>>();  // 描画済みペア
+            var drawn = new List<Tuple<UserOrNpcInfo, UserOrNpcInfo>>();  // 描画済みペア
             foreach (var u in users)
             {
                 foreach (var emo in u.Emotions)
@@ -194,15 +194,15 @@ namespace SinobigamiBot
                             endColor = System.Drawing.Color.Blue;
                             break;
                     }
-                    UserInfo target = users.Find(x => x.User.Id == emo.Key.Id);
+                    UserOrNpcInfo target = users.Find(x => x == emo.Key);
                     // 描画済みならスキップ
-                    if (drawn.Contains(new Tuple<UserInfo, UserInfo>(target, u)))
+                    if (drawn.Contains(new Tuple<UserOrNpcInfo, UserOrNpcInfo>(target, u)))
                         continue;
 
                     System.Drawing.Color startColor = System.Drawing.Color.Gray;
-                    if (target.Emotions.ContainsKey(u.User))
+                    if (target.Emotions.ContainsKey(u))
                     {
-                        if (target.Emotions[u.User].Type == EmotionType.plus)
+                        if (target.Emotions[u].Type == EmotionType.plus)
                             startColor = System.Drawing.Color.Orange;
                         else
                             startColor = System.Drawing.Color.Blue;
@@ -223,7 +223,7 @@ namespace SinobigamiBot
                     g.DrawLine(p2, middle, endPoint);
                     b1.Dispose(); b2.Dispose();
 
-                    drawn.Add(new Tuple<UserInfo, UserInfo>(u, target));
+                    drawn.Add(new Tuple<UserOrNpcInfo, UserOrNpcInfo>(u, target));
                 }
             }
             // ---------------- ユーザー名描画 ----------------------------

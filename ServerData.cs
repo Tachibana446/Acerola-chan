@@ -13,11 +13,11 @@ namespace SinobigamiBot
     {
         public Server Server { get; set; }
 
-        public Dictionary<User, List<int>> Plots { get; set; } = new Dictionary<User, List<int>>();
-        public List<Dictionary<User, List<int>>> OldPlots { get; set; } = new List<Dictionary<User, List<int>>>();
+        public Dictionary<UserOrNpcInfo, List<int>> Plots { get; set; } = new Dictionary<UserOrNpcInfo, List<int>>();
+        public List<Dictionary<UserOrNpcInfo, List<int>>> OldPlots { get; set; } = new List<Dictionary<UserOrNpcInfo, List<int>>>();
 
-        public List<UserInfo> Players { get; set; } = new List<UserInfo>();
-        public List<UserInfo> AllUsers { get; set; } = new List<UserInfo>();
+        public List<UserOrNpcInfo> Players { get; set; } = new List<UserOrNpcInfo>();
+        public List<UserOrNpcInfo> AllUsers { get; set; } = new List<UserOrNpcInfo>();
 
         public bool isInitialized = false;
 
@@ -35,11 +35,20 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// NPCを追加
+        /// </summary>
+        /// <param name="name"></param>
+        public void AddNpc(string name)
+        {
+            Players.Add(new NpcInfo(name));
+        }
+
+        /// <summary>
         /// プロットの再設定
         /// </summary>
         /// <param name="user"></param>
         /// <param name="plots"></param>
-        public void SetPlotAgain(User user, List<int> plots)
+        public void SetPlotAgain(UserOrNpcInfo user, List<int> plots)
         {
             if (Plots.Keys.Count == 0 && OldPlots.Count != 0)
                 Plots = OldPlots.Last();
@@ -51,7 +60,7 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="user"></param>
         /// <param name="plots"></param>
-        public void SetPlot(User user, List<int> plots)
+        public void SetPlot(UserOrNpcInfo user, List<int> plots)
         {
             if (Plots.Keys.Contains(user))
             {
@@ -69,7 +78,7 @@ namespace SinobigamiBot
         public void ResetPlot()
         {
             OldPlots.Add(Plots);
-            Plots = new Dictionary<User, List<int>>();
+            Plots = new Dictionary<UserOrNpcInfo, List<int>>();
         }
 
         /// <summary>
@@ -80,7 +89,7 @@ namespace SinobigamiBot
         public string GetNotYetEnterUsersString()
         {
             var users = GetNotYetEnterUsers();
-            return string.Join(", ", users.Select(u => u.NickOrName()));
+            return string.Join(", ", users.Select(u => u.NickOrName));
         }
 
         /// <summary>
@@ -88,12 +97,12 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="s"></param>
         /// <returns></returns>
-        private List<UserInfo> GetNotYetEnterUsers()
+        private List<UserOrNpcInfo> GetNotYetEnterUsers()
         {
-            var result = new List<UserInfo>();
+            var result = new List<UserOrNpcInfo>();
             foreach (var user in Players)
             {
-                if (!Plots.Keys.Any(k => k.Id == user.User.Id))
+                if (!Plots.Keys.Any(k => k == user))
                     result.Add(user);
             }
             return result;
@@ -112,7 +121,7 @@ namespace SinobigamiBot
             for (int i = 0; i < 6; i++)
                 plots.Add(new List<string>());
 
-            foreach (User user in Plots.Keys)
+            foreach (UserOrNpcInfo user in Plots.Keys)
             {
                 foreach (int p in Plots[user])
                 {
@@ -169,12 +178,12 @@ namespace SinobigamiBot
             foreach (var user in Players)
             {
                 sw.WriteLine("[User]");
-                sw.WriteLine($"Name={user.User.Name}");
-                sw.WriteLine($"Id={user.User.Id}");
+                sw.WriteLine($"Name={user.Name}");
+                if (!user.IsNpc) sw.WriteLine($"Id={((UserInfo)user).User.Id }");
                 sw.WriteLine($"XY={user.Point.X},{user.Point.Y}");
                 foreach (var userAndEmo in user.Emotions)
                 {
-                    sw.WriteLine($"Emotion={userAndEmo.Key.Id},{userAndEmo.Value.ToString()}");
+                    sw.WriteLine($"Emotion={userAndEmo.Key.NickOrName},{userAndEmo.Value.ToString()}");
                 }
                 foreach (var secrets in user.Secrets)
                 {
@@ -192,13 +201,14 @@ namespace SinobigamiBot
         /// </summary>
         public void LoadPlayersInfo()
         {
-            var result = new List<UserInfo>();
+            var result = new List<UserOrNpcInfo>();
             var lines = System.IO.File.ReadLines($"{Program.serverDataFolder}/{Server.Id}.txt");
             User nowUser = null;
             Point nowPoint = new Point(0, 0);
-            var nowEmotions = new Dictionary<User, Emotion>();
+            var nowEmotions = new Dictionary<UserOrNpcInfo, Emotion>();
             var nowSecrets = new List<Secret>();
             var nowStatus = new Dictionary<string, object>();
+            string nowName = "";
 
             bool skipToNextUser = false;
             foreach (var line in lines)
@@ -206,10 +216,11 @@ namespace SinobigamiBot
                 if (line.Trim() == "[User]")
                 {
                     nowPoint = new Point(0, 0);
-                    nowEmotions = new Dictionary<User, Emotion>();
+                    nowEmotions = new Dictionary<UserOrNpcInfo, Emotion>();
                     nowSecrets = new List<Secret>();
                     nowStatus = new Dictionary<string, object>();
                     nowUser = null;
+                    nowName = "";
                     skipToNextUser = false;
                     continue;
                 }
@@ -217,8 +228,14 @@ namespace SinobigamiBot
                     continue;
                 if (line.Trim() == "[UserEnd]")
                 {
-                    if (nowUser == null) continue;
-                    result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets, nowStatus));
+                    if (nowUser == null)
+                    {
+                        result.Add(new NpcInfo(nowName, nowEmotions, nowSecrets, nowStatus));
+                    }
+                    else
+                    {
+                        result.Add(new UserInfo(nowUser, nowEmotions, nowSecrets, nowStatus));
+                    }
                     continue;
                 }
 
@@ -239,10 +256,10 @@ namespace SinobigamiBot
                         nowPoint = new Point(xy[0], xy[1]);
                         break;
                     case "Emotion":
-                        var idAndEmo = value.Split(',');
-                        ulong toId = ulong.Parse(idAndEmo[0]);
-                        Emotion emo = new Emotion(idAndEmo[1], Emotion.ParseEmotionType(idAndEmo[2]));
-                        User toUser = Server.Users.First(u => u.Id == toId);
+                        var nickAndEmo = value.Split(',');
+                        string toName = nickAndEmo[0];
+                        Emotion emo = new Emotion(nickAndEmo[1], Emotion.ParseEmotionType(nickAndEmo[2]));
+                        UserOrNpcInfo toUser = AllUsers.First(u => u.NickOrName == toName);
                         if (toUser == null)
                             continue;
                         nowEmotions.Add(toUser, emo);
@@ -252,6 +269,9 @@ namespace SinobigamiBot
                         break;
                     case "Status":
                         nowStatus = UserInfo.StatusFormCSV(line.Substring("Status=".Length));
+                        break;
+                    case "Name":
+                        nowName = value;
                         break;
                     default:
                         break;
@@ -271,8 +291,9 @@ namespace SinobigamiBot
             UserInfo result = null;
             foreach (var u in Players)
             {
-                if (u.User.Id == user.Id)
-                { result = u; break; }
+                if (u.IsNpc) continue;
+                if (((UserInfo)u).User.Id == user.Id)
+                { result = (UserInfo)u; break; }
             }
             if (result == null)
             {
@@ -282,21 +303,44 @@ namespace SinobigamiBot
         }
 
         /// <summary>
+        /// いなければ例外
+        /// </summary>
+        /// <param name="user"></param>
+        /// <returns></returns>
+        public UserInfo GetUser(User user)
+        {
+            UserInfo result = null;
+            foreach (var u in Players)
+            {
+                if (u.IsNpc) continue;
+                if (((UserInfo)u).User.Id == user.Id)
+                { result = (UserInfo)u; break; }
+            }
+            if (result == null)
+            {
+                throw new Exception($"{user.Name}はいないよ");
+            }
+            return result;
+        }
+
+
+
+        /// <summary>
         /// パターンにマッチするプレイヤーを返す
         /// </summary>
         /// <param name="pattern"></param>
         /// <returns></returns>
-        public UserInfo GetMatchPlayer(string pattern)
+        public UserOrNpcInfo GetMatchPlayer(string pattern)
         {
             foreach (var user in Players)
             {
-                if (user.NickOrName() == pattern || user.Name == pattern)
+                if (user.NickOrName == pattern || user.Name == pattern)
                     return user;
             }
-            var matchList = new List<UserInfo>();
+            var matchList = new List<UserOrNpcInfo>();
             foreach (var user in Players)
             {
-                if (Regex.IsMatch(user.NickOrName(), pattern) || Regex.IsMatch(user.Name, pattern))
+                if (Regex.IsMatch(user.NickOrName, pattern) || Regex.IsMatch(user.Name, pattern))
                     matchList.Add(user);
             }
             if (matchList.Count == 0)
@@ -304,25 +348,26 @@ namespace SinobigamiBot
             else if (matchList.Count == 1)
                 return matchList.First();
             else
-                throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName()))}");
+                throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName))}");
         }
 
         /// <summary>
         /// パターンにマッチするユーザーを返す
+        /// 複数いるときは例外
         /// </summary>
         /// <param name="pattern"></param>
         /// <returns></returns>
-        public UserInfo GetMatchUser(string pattern)
+        public UserOrNpcInfo GetMatchUser(string pattern)
         {
             foreach (var user in AllUsers)
             {
-                if (user.NickOrName() == pattern || user.Name == pattern)
+                if (user.NickOrName == pattern || user.Name == pattern)
                     return user;
             }
-            var matchList = new List<UserInfo>();
+            var matchList = new List<UserOrNpcInfo>();
             foreach (var user in AllUsers)
             {
-                if (Regex.IsMatch(user.NickOrName(), pattern) || Regex.IsMatch(user.Name, pattern))
+                if (Regex.IsMatch(user.NickOrName, pattern) || Regex.IsMatch(user.Name, pattern))
                     matchList.Add(user);
             }
             if (matchList.Count == 0)
@@ -330,7 +375,7 @@ namespace SinobigamiBot
             else if (matchList.Count == 1)
                 return matchList.First();
             else
-                throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName()))}");
+                throw new Exception($"{pattern}にマッチするユーザーが複数います  {string.Join(",", matchList.Select(m => m.NickOrName))}");
         }
 
         /// <summary>

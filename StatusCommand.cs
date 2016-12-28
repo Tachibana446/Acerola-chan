@@ -15,7 +15,7 @@ namespace SinobigamiBot
         private const string HelpFilePath = "./data/usage-status.txt";
 
         private ServerData Server { get; set; }
-        private UserInfo user;
+        private UserOrNpcInfo user;
 
         public StatusCommand(ServerData server)
         {
