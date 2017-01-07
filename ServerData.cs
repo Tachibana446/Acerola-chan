@@ -14,6 +14,10 @@ namespace SinobigamiBot
         public Server Server { get; set; }
 
         public Dictionary<UserOrNpcInfo, List<int>> Plots { get; set; } = new Dictionary<UserOrNpcInfo, List<int>>();
+        /// <summary>
+        /// ナラク
+        /// </summary>
+        public List<Tuple<int, string>> Narakus { get; set; } = new List<Tuple<int, string>>();
         public List<Dictionary<UserOrNpcInfo, List<int>>> OldPlots { get; set; } = new List<Dictionary<UserOrNpcInfo, List<int>>>();
 
         public List<UserOrNpcInfo> Players { get; set; } = new List<UserOrNpcInfo>();
@@ -43,6 +47,16 @@ namespace SinobigamiBot
             var npc = new NpcInfo(name);
             Players.Add(npc);
             AllUsers.Add(npc);
+        }
+
+        /// <summary>
+        /// プロットにしかける罠をセットする
+        /// </summary>
+        /// <param name="plot"></param>
+        /// <param name="name"></param>
+        public void SetPlotTrap(int plot, string name)
+        {
+            Narakus.Add(new Tuple<int, string>(plot, name));
         }
 
         /// <summary>
@@ -81,6 +95,7 @@ namespace SinobigamiBot
         {
             OldPlots.Add(Plots);
             Plots = new Dictionary<UserOrNpcInfo, List<int>>();
+            Narakus.Clear();
         }
 
         /// <summary>

@@ -152,6 +152,8 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await AgainSetPlot(e);
                 // Reset Plot
                 client.MessageReceived += async (s, e) => await ResetPlotEvent(e);
+                // 奈落などのセット
+                client.MessageReceived += async (s, e) => await SetNarakus(e);
                 // Show Plot
                 client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
@@ -181,6 +183,24 @@ namespace SinobigamiBot
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
+        }
+
+        private async Task SetNarakus(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#罠\s+(.*?)\s+(\d+)");
+            if (!match.Success) return;
+            var name = match.Groups[1].Value.Trim();
+            int plot = int.Parse(match.Groups[2].Value);
+            if (plot < 1 || plot > 6)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " プロット値は1~6にしてね" + Setting.SadKaomoji);
+                return;
+            }
+            if (name == "") return;
+            var server = GetServer(e);
+            server.SetPlotTrap(plot, name);
+            await e.Channel.SendMessage(e.User.Mention + $"了解！{plot}に{name}を仕掛けたよ" + Setting.HappyKaomoji);
         }
 
 
