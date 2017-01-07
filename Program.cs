@@ -17,7 +17,7 @@ namespace SinobigamiBot
         static void Main(string[] args) => new Program().Start();
 
         DiscordClient client = new DiscordClient();
-        public static SettingData setting = new SettingData();
+        public static Setting setting = new Setting();
 
         Random random = new Random();
 
@@ -34,6 +34,19 @@ namespace SinobigamiBot
         /// セリフ
         /// </summary>
         List<string> Serifs = new List<string>();
+        /// <summary>
+        /// 読み上げてくれるやつ
+        /// </summary>
+        Yomiage yomi;
+        /// <summary>
+        /// 削除依頼
+        /// </summary>
+        Dictionary<User, UserOrNpcInfo> removeOrder = new Dictionary<User, UserOrNpcInfo>();
+
+        GeneralTalk generalTalk = new GeneralTalk();
+        Pokemon pokemonTalk = new Pokemon();
+
+        public static string[] SinobigamiStatus = new string[] { "器術", "体術", "忍術", "謀術", "戦術", "妖術" };
 
         const string serifFolder = "./data/serif";
         const string serifFilePath = serifFolder + "/serif.txt";
@@ -64,18 +77,43 @@ namespace SinobigamiBot
 
             client.UsingAudio(x => { x.Mode = AudioMode.Outgoing; });
 
+            yomi = new Yomiage(setting);
             try
             {
                 // Set Users
                 client.MessageReceived += (s, e) => Initialize(e);
+                // 読み上げ
+                client.MessageReceived += async (s, e) => await MessageYomiage(e);
+                // ダメージ
+                client.MessageReceived += async (s, e) => await CloseBattleDamageCommand(e);
+                client.MessageReceived += async (s, e) => await SelectOverlapDamage(e);
+                client.MessageReceived += async (s, e) => await SelectOverlapDamageNpc(e);
+                client.MessageReceived += async (s, e) => await DamageOrHeal(e);
+                client.MessageReceived += async (s, e) => await HealAll(e);
                 // 参加者のリスト
                 client.MessageReceived += async (s, e) => await PlayersList(e);
                 // 参加者の再設定
                 client.MessageReceived += async (s, e) => await ResetPlayersOrder(e);
+                // NPC の追加
+                client.MessageReceived += async (s, e) => await AddNpc(e);
+                // NPCの削除
+                client.MessageReceived += async (s, e) => await RemoveNpc(e);
+                client.MessageReceived += async (s, e) => await RemoveNpcOrder(e);
                 // Reload Users
                 client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
                 // 関係図を作成し送信
-                client.MessageReceived += async (s, e) => await ShowRelationGraph(e);
+                client.MessageReceived += async (s, e) =>
+                {
+                    try
+                    {
+                        await ShowRelationGraph(e);
+                    }
+                    catch (Exception ex)
+                    {
+                        SaveLog(ex, e);
+                    }
+                };
+
                 // Show Choices Emotion
                 client.MessageReceived += async (s, e) => await SetEmotion(e);
                 // Select Choice
@@ -98,16 +136,24 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await SetStatus(e);
 
                 // Dice roll
-                client.MessageReceived += async (s, e) => await DiceRollEvent(s, e);
+                client.MessageReceived += async (s, e) =>
+                {
+                    try { await DiceRollEvent(s, e); }
+                    catch (Exception ex) { SaveLog(ex, e); }
+                };
                 // Dice Rest
                 client.MessageReceived += async (s, e) => await ResetDiceEvent(s, e);
 
+                // プロットのセット
+                client.MessageReceived += async (s, e) => await SetPlotCommand(e);
                 // Set Plot
                 client.MessageReceived += async (s, e) => await SetPlotEvent(e);
                 // Set Plot Again
                 client.MessageReceived += async (s, e) => await AgainSetPlot(e);
                 // Reset Plot
                 client.MessageReceived += async (s, e) => await ResetPlotEvent(e);
+                // 奈落などのセット
+                client.MessageReceived += async (s, e) => await SetNarakus(e);
                 // Show Plot
                 client.MessageReceived += async (s, e) => await ShowPlotEvent(e);
 
@@ -115,10 +161,13 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await ShowUsage(e);
                 // 会話
                 client.MessageReceived += async (s, e) => await PutSerif(e);
+                client.MessageReceived += async (s, e) => await generalTalk.Do(e);
 
                 // クイズ // 解答の方を先にすること
                 client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
                 client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
+                // ポケモン図鑑
+                client.MessageReceived += async (s, e) => await pokemonTalk.Do(e);
 
                 // タイマー
                 client.MessageReceived += async (s, e) => await SetAlarm(e);
@@ -127,13 +176,418 @@ namespace SinobigamiBot
             }
             catch (Exception exc)
             {
-                var sw = new System.IO.StreamWriter("log.txt");
+                var sw = new System.IO.StreamWriter("log.txt", true);
                 sw.WriteLine($"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}\n{exc}\n{exc.Message}");
                 sw.Close();
             }
 
             // Exe
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
+        }
+
+        private async Task SetNarakus(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#罠\s+(.*?)\s+(\d+)");
+            if (!match.Success) return;
+            var name = match.Groups[1].Value.Trim();
+            int plot = int.Parse(match.Groups[2].Value);
+            if (plot < 1 || plot > 6)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " プロット値は1~6にしてね" + Setting.SadKaomoji);
+                return;
+            }
+            if (name == "") return;
+            var server = GetServer(e);
+            server.SetPlotTrap(plot, name);
+            await e.Channel.SendMessage(e.User.Mention + $"了解！{plot}に{name}を仕掛けたよ" + Setting.HappyKaomoji);
+        }
+
+
+        /// <summary>
+        /// NPCの追加
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task AddNpc(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), "^#NPC追加(.*)");
+            if (!match.Success) return;
+            var npcName = match.Groups[1].Value.Trim();
+            if (npcName == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にNPCの名前を入れてね" + Setting.SadKaomoji); return; }
+            var server = GetServer(e);
+            if (server.Players.Any(p => p.Name == npcName))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {npcName}というNPCはすでにいるよ{Setting.SadKaomoji}");
+                return;
+            }
+            server.AddNpc(npcName);
+            await e.Channel.SendMessage(e.User.Mention + " NPCを追加したよ" + Setting.HappyKaomoji);
+            server.SavePlayersInfo();
+        }
+        /// <summary>
+        /// NPCを削除する依頼
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task RemoveNpcOrder(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), "^#NPC削除(.*)");
+            if (!match.Success) return;
+            var npcName = match.Groups[1].Value.Trim();
+            if (npcName == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にNPCの名前を入れてね" + Setting.SadKaomoji); return; }
+            var server = GetServer(e);
+            UserOrNpcInfo npc = null;
+            try { npc = server.GetMatchPlayer(npcName); }
+            catch (Exception ex) { await e.Channel.SendMessage(e.User.Mention + " " + ex.Message); return; }
+            if (npc == null) { await e.Channel.SendMessage(e.User.Mention + " " + npcName + "にマッチするユーザーはいないよ" + Setting.SadKaomoji); return; }
+
+            removeOrder.Add(e.User, npc);
+            await e.Channel.SendMessage(e.User.Mention + $" {npc.Name}を削除する？(はい/いいえ)");
+        }
+        /// <summary>
+        /// 実際に削除する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task RemoveNpc(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            if (!removeOrder.Keys.Contains(e.User)) return;
+            if (Regex.IsMatch(e.Message.Text.ToNarrow(), @"(no|No|いいえ)$"))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" わかったー{Setting.HappyKaomoji}キャンセルしまーす");
+                removeOrder.Remove(e.User);
+            }
+            else if (Regex.IsMatch(e.Message.Text.ToNarrow(), @"(yes|Yes|はい)$"))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" はーい！{removeOrder[e.User].Name}を削除したよー！{Setting.HappyKaomoji}");
+                var npc = removeOrder[e.User];
+                var server = GetServer(e);
+                server.Players.Remove(npc);
+                server.AllUsers.Remove(npc);
+                removeOrder.Remove(e.User);
+            }
+        }
+
+        /// <summary>
+        /// 他人のプロットをセットする
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SetPlotCommand(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#プロット\s+(.*).*(\d+)(.*)");
+            if (!match.Success) return;
+            var server = GetServer(e);
+            UserOrNpcInfo user = null;
+            try { user = server.GetMatchPlayer(match.Groups[1].Value.Trim()); }
+            catch (Exception ex) { await e.Channel.SendMessage(e.User.Mention + " " + ex.Message); return; }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value.Trim()   }にマッチするユーザーはいないよ");
+                return;
+            }
+            int plot = int.Parse(match.Groups[2].Value);
+            var match2 = Regex.Match(match.Groups[3].Value, @"and.*(\d+)");
+            if (match2.Success)
+            {
+                server.Plots[user] = new int[] { plot, int.Parse(match2.Groups[1].Value) }.ToList();
+            }
+            else
+            {
+                server.Plots[user] = new int[] { plot }.ToList();
+            }
+            await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + "未入力：" + server.GetNotYetEnterUsersString());
+        }
+
+
+        private void SaveLog(string message)
+        {
+            var sw = new System.IO.StreamWriter("./log.txt", true);
+            sw.WriteLine($"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}:{DateTime.Now.Second}");
+            sw.WriteLine(message);
+            sw.Close();
+        }
+
+        private void SaveLog(Exception e, MessageEventArgs eArgs)
+        {
+            SaveLog(e.ToString() + "\n" + e.Message);
+            eArgs.Channel.SendMessage(e.StackTrace + "\n" + e.Message);
+        }
+
+        /// <summary>
+        /// 接近戦ダメージ
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task CloseBattleDamageCommand(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var text = e.Message.Text.ToNarrow();
+            var match = Regex.Match(text, @"#接近戦ダメージ\s+(.+)\s(\d+)");
+            if (!match.Success) return;
+            var server = GetServer(e);
+            UserOrNpcInfo user = null;
+            try
+            {
+                user = server.GetMatchPlayer(match.Groups[1].Value);
+            }
+            catch (Exception exc)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + exc.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value}にマッチするユーザーはいないよ");
+                return;
+            }
+            int n = int.Parse(match.Groups[2].Value);
+            var statuses = SinobigamiStatus.ToList();
+            var damaged = new List<string>();
+            var overlaped = new List<string>();
+            user.OverlapDamageCount = 0;
+            var alive = user.GetLiveStatus().Split(',');
+            if (alive.Length <= n)
+            {
+                foreach (var s in alive)
+                {
+                    user.SetStatus(s, "False");
+                    damaged.Add(s);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    var s = statuses.Sample();
+                    if ((bool)user.GetStatus(s) == false)
+                    {
+                        overlaped.Add(s);
+                        user.OverlapDamageCount += 1;
+                    }
+                    else
+                    {
+                        user.SetStatus(s, "False");
+                        damaged.Add(s);
+                    }
+                }
+            }
+            if (damaged.Count != 0)
+                await e.Channel.SendMessage($"{user.NickOrName}の{string.Join(",", damaged)}を:x:にしたよ");
+            if (user.OverlapDamageCount != 0)
+            {
+                if (user.IsNpc)
+                {
+                    var excuter = server.GetUser(e.User);
+                    excuter.OverlapDamageNpc = (NpcInfo)user;
+                    await e.Channel.SendMessage(e.User.Mention + $" {string.Join(",", overlaped)}が被ったので好きな能力を選択してダメージを受けてね({user.GetLiveStatus()}の中から{user.OverlapDamageCount}個)");
+                }
+                else
+                {
+                    await e.Channel.SendMessage($"{((UserInfo)user).User.Mention} {string.Join(",", overlaped)}が被ったので好きな能力を選択してダメージを受けてね({user.GetLiveStatus()}の中から{user.OverlapDamageCount}個)");
+                }
+            }
+            server.SavePlayersInfo();
+        }
+        /// <summary>
+        /// 接近戦ダメージでかぶった時選択する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SelectOverlapDamage(MessageEventArgs e)
+        {
+            var server = GetServer(e);
+            UserInfo user = null;
+            try { user = server.GetPlayer(e.User); }
+            catch { return; }
+            if (user.OverlapDamageCount == 0) return;
+            string text = e.Message.Text.ToNarrow();
+            var sinobigamiStatus = SinobigamiStatus.ToList();
+            var statuses = new List<string>();
+            foreach (var status in text.Split(' ').Select(s => s.Trim()))
+            {
+                int index = sinobigamiStatus.IndexOf(status);
+                if (index == -1) return;
+                if (!statuses.Contains(status))
+                {
+                    statuses.Add(status);
+                }
+                else
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $"{status}がかぶってるよ");
+                    return;
+                }
+            }
+            foreach (var status in statuses)
+            {
+                user.SetStatus(status, "False");
+            }
+            await e.Channel.SendMessage(e.User.Mention + " " + string.Join(",", statuses) + "を:x:にしたよ ");
+            await e.Channel.SendMessage(user.UserStatus());
+            user.OverlapDamageCount = 0;
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// 接近戦ダメージでかぶった時選択する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task SelectOverlapDamageNpc(MessageEventArgs e)
+        {
+            var server = GetServer(e);
+            UserInfo user = null;
+            try { user = server.GetPlayer(e.User); }
+            catch { return; }
+            if (user.OverlapDamageNpc == null) return;
+            string text = e.Message.Text.ToNarrow();
+            var sinobigamiStatus = SinobigamiStatus.ToList();
+            var statuses = new List<string>();
+            foreach (var status in text.Split(' ').Select(s => s.Trim()))
+            {
+                int index = sinobigamiStatus.IndexOf(status);
+                if (index == -1) return;
+                if (!statuses.Contains(status))
+                {
+                    statuses.Add(status);
+                }
+                else
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $"{status}がかぶってるよ");
+                    return;
+                }
+            }
+            foreach (var status in statuses)
+            {
+                user.OverlapDamageNpc.SetStatus(status, "False");
+            }
+            await e.Channel.SendMessage(e.User.Mention + " " + string.Join(",", statuses) + "を:x:にしたよ ");
+            await e.Channel.SendMessage(user.OverlapDamageNpc.UserStatus());
+            user.OverlapDamageNpc = null;
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// 自由に選択してダメージを受ける
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task DamageOrHeal(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#(ダメージ|回復)(.*)");
+            if (!match.Success) return;
+            if (match.Groups[2].Value == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にユーザー名と受けるダメージのスロットを書いてね"); return; }
+            var args = match.Groups[2].Value.Split(' ').Select(s => s.Trim()).ToList();
+            args.RemoveAll(s => s == "");
+            var server = GetServer(e);
+            UserOrNpcInfo user = null;
+            try { user = server.GetMatchPlayer(args[0]); }
+            catch (Exception ex)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {args[0]}にマッチするユーザーはいないよ");
+                return;
+            }
+            args.RemoveAt(0);
+            if (args.Count == 0)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 回復/ダメージを受けるステータスをスペース区切りで入力してね");
+                return;
+            }
+            bool heal = match.Groups[1].Value == "回復";
+            foreach (var status in args)
+            {
+                if (!SinobigamiStatus.Contains(status))
+                {
+                    await e.Channel.SendMessage(e.User.Mention + $" {status}はステータスじゃないよ({string.Join(",", SinobigamiStatus)}から選んでね)");
+                    return;
+                }
+                if (heal)
+                    user.SetStatus(status, "True");
+                else
+                    user.SetStatus(status, "False");
+            }
+            var oORx = heal ? ":o:" : ":x:";
+            await e.Channel.SendMessage($"{user.NickOrName}の{string.Join(",", args)}を{oORx}にしたよ");
+            await e.Channel.SendMessage(user.UserStatus());
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// 全回復
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task HealAll(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var server = GetServer(e);
+            var match = Regex.Match(e.Message.Text.ToNarrow(), @"#全回復\s+(.*)");
+            if (!match.Success) return;
+            if (match.Groups[1].Value == "")
+            {
+                await e.Channel.SendMessage(e.User.Mention + " 引数にユーザー名を与えてね");
+                return;
+            }
+            UserOrNpcInfo user = null;
+            try { user = server.GetMatchPlayer(match.Groups[1].Value); }
+            catch (Exception ex)
+            {
+                await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
+                return;
+            }
+            if (user == null)
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {match.Groups[1].Value}にマッチするユーザーはいないよ");
+                return;
+            }
+
+            foreach (var s in SinobigamiStatus)
+            {
+                user.SetStatus(s, "True");
+            }
+            await e.Channel.SendMessage($"{user.NickOrName}を全回復したよ");
+            await e.Channel.SendMessage(user.UserStatus());
+
+            server.SavePlayersInfo();
+        }
+
+        /// <summary>
+        /// メッセージを読み上げる
+        /// </summary>
+        /// <param name="e"></param>
+        private async Task MessageYomiage(MessageEventArgs e)
+        {
+            if (e.User.IsBot) return;
+            if (!setting.IsYomiageMessage) return;
+            var server = GetServer(e);
+            var uinfo = new UserInfo(e.User);
+            // Ignore処理
+            foreach (var pattern in setting.YomiageIgnoreUsers)
+            {
+                UserOrNpcInfo u;
+                try
+                {
+                    u = server.GetMatchUser(pattern);
+                }
+                catch
+                {
+                    continue;
+                }
+                if (u != null && !u.IsNpc && e.User.Id == ((UserInfo)u).User.Id)
+                    return;
+            }
+            await yomi.Speak($"{uinfo.NickOrName}\n{e.Message.Text}");
         }
 
         /// <summary>
@@ -168,23 +622,6 @@ namespace SinobigamiBot
                 server = new ServerData(e.Server);
                 ServerDatas.Add(server);
             }
-
-            if (server.isInitialized)
-                return;
-            if (ExistsUserInfoFile(e.Server))
-            {
-                server.LoadPlayersInfo();
-            }
-            else
-            {
-                var users = GetServerUsers(e.Server, true);
-                foreach (var user in users)
-                {
-                    server.Players.Add(new UserInfo(user));
-                }
-            }
-
-            server.isInitialized = true;
         }
 
         /// <summary>
@@ -234,42 +671,28 @@ namespace SinobigamiBot
                 await e.Channel.SendMessage(e.User.Mention + " ユーザー名をスペース区切りで指定してね！");
                 return;
             }
-            var server = ServerDatas.First(s => s.Server.Id == e.Server.Id);
-            var users = e.Server.Users;
-            var userInfos = new List<UserInfo>();
+            var server = GetServer(e);
+            var userInfos = new List<UserOrNpcInfo>();
             var usernames = match.Groups[1].Value.Split(' ').Select(s => s.Trim()).ToList();
             foreach (var name in usernames)
             {
                 if (name == "") continue;
-                bool fullMatch = false;
-                List<UserInfo> imcompleteMatchs = new List<UserInfo>();
-                foreach (var user in users)
+                UserOrNpcInfo user = null;
+                try
                 {
-                    if (isMatchUserNameOrNick(user, name))
-                    {
-                        userInfos.Add(new UserInfo(user));
-                        fullMatch = true;
-                    }
-
-                    if (!fullMatch)
-                    {
-                        if ((user.Nickname != null && Regex.IsMatch(user.Nickname, name)) || Regex.IsMatch(user.Name, name))
-                            imcompleteMatchs.Add(new UserInfo(user));
-                    }
+                    user = server.GetMatchUser(name);
                 }
-                if (imcompleteMatchs.Count >= 2)
+                catch (Exception ex)
                 {
-                    string imcompletes = string.Join(",", imcompleteMatchs.Select(u => u.NickOrName()));
-                    await e.Channel.SendMessage($"{e.User.Mention} ***エラー***:{name}にマッチするユーザーが{imcompleteMatchs.Count}人いるよ？({imcompletes})");
-                    return;
+                    await e.Channel.SendMessage(e.User.Mention + " " + ex.Message);
                 }
-                if (imcompleteMatchs.Count == 1)
-                    userInfos.Add(imcompleteMatchs[0]);
+                if (user == null) continue;
+                userInfos.Add(user);
             }
             // TODO サーバーファイルのバックアップ
-            server.Players = userInfos.Distinct().ToList();
+            server.Players = userInfos;
             server.SavePlayersInfo();
-            var text = string.Join(",", server.Players.Select(u => u.NickOrName()));
+            var text = string.Join(",", server.Players.Select(u => u.NickOrName));
             await e.Channel.SendMessage($"{text} を参加者として登録したよ！（ただしこれまでのデータは破棄されました）");
         }
 
@@ -282,7 +705,7 @@ namespace SinobigamiBot
         {
             if (e.Message.IsAuthor || !Regex.IsMatch(e.Message.Text, @"参加者の?リスト")) return;
             var server = GetServer(e);
-            var users = string.Join("\n", server.Players.Select(u => u.NickOrName()));
+            var users = string.Join("\n", server.Players.Select(u => u.NickOrName));
             await e.Channel.SendMessage($"参加者：\n{users}");
         }
 
@@ -324,7 +747,7 @@ namespace SinobigamiBot
         /// 感情を登録する際に使う一時変数
         /// [ユーザー] => {対象ユーザー, 対象感情}
         /// </summary>
-        Dictionary<User, Tuple<User, string>> setEmotionTemp = new Dictionary<User, Tuple<User, string>>();
+        Dictionary<User, Tuple<UserOrNpcInfo, string>> setEmotionTemp = new Dictionary<User, Tuple<UserOrNpcInfo, string>>();
 
         /// <summary>
         /// 取得する感情の候補を出す
@@ -345,7 +768,7 @@ namespace SinobigamiBot
                     await e.Channel.SendMessage(e.User.Mention + " 感情の対象のユーザー名を引数として与えてね(｡☌ᴗ☌｡)");
                     return;
                 }
-                UserInfo targetUser = null;
+                UserOrNpcInfo targetUser = null;
                 try
                 {
                     targetUser = server.GetMatchPlayer(target);
@@ -360,13 +783,13 @@ namespace SinobigamiBot
                     var choice = Emotion.RandomChoice();
                     if (setEmotionTemp.ContainsKey(e.User))
                     {
-                        setEmotionTemp[e.User] = new Tuple<User, string>(targetUser.User, choice);
+                        setEmotionTemp[e.User] = new Tuple<UserOrNpcInfo, string>(targetUser, choice);
                     }
                     else
                     {
-                        setEmotionTemp.Add(e.User, new Tuple<User, string>(targetUser.User, choice));
+                        setEmotionTemp.Add(e.User, new Tuple<UserOrNpcInfo, string>(targetUser, choice));
                     }
-                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.NickOrName()}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
+                    await e.Channel.SendMessage(e.User.Mention + $" {targetUser.NickOrName}に対して\n" + choice + "\nどちらを取得する？(プラスかマイナスかで回答）");
                     return;
                 }
                 else
@@ -403,7 +826,7 @@ namespace SinobigamiBot
                 em = Emotion.MinusEmotions[index];
 
             var server = GetServer(e);
-            var uInfo = server.Players.First(u => u.User.Id == e.User.Id);
+            var uInfo = server.Players.First(u => !u.IsNpc && ((UserInfo)u).User.Id == e.User.Id);
             uInfo.AddEmotion(setEmotionTemp[e.User].Item1, em);
             await e.Channel.SendMessage(e.User.Mention + $" {setEmotionTemp[e.User].Item1.Name}に{em.Name}を得たよ！(๑˃̵ᴗ˂̵)و");
             setEmotionTemp.Remove(e.User);  // 一時変数ノクリア
@@ -424,21 +847,21 @@ namespace SinobigamiBot
             string emoStr = match.Groups["emotion"].Value;
             var emo = Emotion.ParseEmotion(emoStr);
             if (emo == null) { await e.Channel.SendMessage(e.User.Mention + $" ${emoStr}という感情はないよ？"); return; }
-            UserInfo user1 = null, user2 = null;
+            UserOrNpcInfo user1 = null, user2 = null;
             try
             {
                 user1 = server.GetMatchPlayer(match.Groups["user1"].Value);
-                if (user1 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user1}というユーザーはいないよ？"); return; }
+                if (user1 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user1}というプレイヤーはいないよ？"); return; }
                 user2 = server.GetMatchPlayer(match.Groups["user2"].Value);
-                if (user2 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user2}というユーザーはいないよ？"); return; }
+                if (user2 == null) { await e.Channel.SendMessage(e.User.Mention + $" {user2}というプレイヤーはいないよ？"); return; }
             }
             catch (Exception exc)
             {
                 await e.Channel.SendMessage(e.User.Mention + " " + exc.Message);
                 return;
             }
-            user1.AddEmotion(user2.User, emo);
-            await e.Channel.SendMessage($"{user1.NickOrName()}は{user2.NickOrName()}に{emo.Name}を得た！");
+            user1.AddEmotion(user2, emo);
+            await e.Channel.SendMessage($"{user1.NickOrName}は{user2.NickOrName}に{emo.Name}を得た！");
             server.SavePlayersInfo();
         }
 
@@ -480,13 +903,12 @@ namespace SinobigamiBot
             if (regex.IsMatch(e.Message.Text))
             {
                 var server = GetServer(e);
-                var info = server.Players.Find(i => i.User.Id == e.User.Id);
+                var info = server.Players.Find(i => !i.IsNpc && ((UserInfo)i).User.Id == e.User.Id);
                 if (info == null) throw new Exception("UserInfoがNull");
                 string message = "";
                 foreach (var emo in info.Emotions)
                 {
-                    var name = emo.Key.Nickname != null ? emo.Key.Nickname : emo.Key.Name;
-                    message += $"\n- {name}\t: {emo.Value.Name}";
+                    message += $"\n- {emo.Key.NickOrName}\t: {emo.Value.Name}";
                 }
                 if (message == "")
                     message = "誰にも感情を抱いていないよ？";
@@ -513,13 +935,13 @@ namespace SinobigamiBot
                 return;
             }
             var server = GetServer(e);
-            var uinfo = server.Players.Find(a => a.User.Id == e.User.Id);
+            var uinfo = server.Players.Find(a => !a.IsNpc && ((UserInfo)a).User.Id == e.User.Id);
             if (uinfo == null)
             {
                 await e.Channel.SendMessage($"{e.User.Mention} あなたは何かしらの理由でプレイヤーリストに載っていないので、秘密を得られません（GMやBOT等");
                 return;
             }
-            UserInfo target = null;
+            UserOrNpcInfo target = null;
             string targetname = arg;
             try
             {
@@ -531,14 +953,14 @@ namespace SinobigamiBot
             }
             if (target != null)
             {
-                uinfo.AddSecret(target.User);
-                targetname = target.NickOrName();
+                uinfo.AddSecret(target);
+                targetname = target.NickOrName;
             }
             else
             {
                 uinfo.AddSecret(arg);
             }
-            var name = uinfo.NickOrName();
+            var name = uinfo.NickOrName;
 
             await e.Channel.SendMessage($"{name} は {targetname}の秘密を 手に入れた！");
             server.SavePlayersInfo();
@@ -559,10 +981,10 @@ namespace SinobigamiBot
             var server = GetServer(e);
             var usersStr = match.Groups["users"].Value.Replace('　', ' ').Split(' ');
             var secret = match.Groups["secret"].Value.Trim();
-            var users = new List<UserInfo>();
+            var users = new List<UserOrNpcInfo>();
             foreach (var name in usersStr)
             {
-                UserInfo user;
+                UserOrNpcInfo user;
                 try
                 {
                     user = server.GetMatchPlayer(name.Trim());
@@ -577,7 +999,7 @@ namespace SinobigamiBot
             }
             foreach (var u in users)
                 u.AddSecret(secret);
-            await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NickOrName()))} は {secret} の秘密を 得た！");
+            await e.Channel.SendMessage($"{string.Join(",", users.Select(u => u.NickOrName))} は {secret} の秘密を 得た！");
             server.SavePlayersInfo();
         }
 
@@ -591,9 +1013,9 @@ namespace SinobigamiBot
             if (e.Message.IsAuthor) return;
             if (!Regex.IsMatch(e.Message.Text, @"秘密の?一覧")) return;
             var server = GetServer(e);
-            var user = server.Players.Find(u => u.User.Id == e.User.Id);
+            var user = server.Players.Find(u => !u.IsNpc && ((UserInfo)u).User.Id == e.User.Id);
 
-            var username = user.NickOrName();
+            var username = user.NickOrName;
             var text = "";
             foreach (var secret in user.Secrets)
             {
@@ -650,7 +1072,8 @@ namespace SinobigamiBot
             {
                 return;
             }
-            server.SetPlot(e.User, plots);
+            var user = server.GetPlayer(e.User);
+            server.SetPlot(user, plots);
 
             await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و\n" + $"未入力：{server.GetNotYetEnterUsersString()}");
         }
@@ -675,7 +1098,7 @@ namespace SinobigamiBot
                     await e.Channel.SendMessage(e.User.Mention + " プロット値は１～６だよ");
                     return;
                 }
-                server.SetPlotAgain(e.User, new int[] { plot }.ToList());
+                server.SetPlotAgain(server.GetPlayer(e.User), new int[] { plot }.ToList());
                 await e.Channel.SendMessage(e.User.Mention + " 了解╭(๑•̀ㅂ•́)و");
             }
         }
@@ -708,7 +1131,7 @@ namespace SinobigamiBot
             if (regex.IsMatch(e.Message.Text))
             {
                 var server = GetServer(e);
-                MakeGraph.MakePlotGraph(server.ResharpPlot(), "./plot.png");
+                MakeGraph.MakePlotGraph(server, "./plot.png");
                 if (setting.ResetPlotOnShow)
                 {
                     server.ResetPlot();

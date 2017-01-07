@@ -8,25 +8,10 @@ using System.Text.RegularExpressions;
 
 namespace SinobigamiBot
 {
-    public class UserInfo
+    public class UserInfo : UserOrNpcInfo
     {
         public User User { get; private set; }
-        /// <summary>
-        /// ユーザーに対して抱いている感情
-        /// </summary>
-        public Dictionary<User, Emotion> Emotions { get; private set; } = new Dictionary<User, Emotion>();
-        // 持っている秘密
-        public List<Secret> Secrets { get; private set; } = new List<Secret>();
-
-        public System.Drawing.Point Point { get; set; }
-
-        public System.Drawing.SizeF StringSize { get; set; }
-
-        public string Name { get { return User.Name; } }
-
-        public int Hp = Program.setting.DefaultHP;
-
-        public Dictionary<string, object> Status { get; set; } = new Dictionary<string, object>();
+        public override bool IsNpc { get { return false; } }
 
         public UserInfo(User user)
         {
@@ -39,14 +24,23 @@ namespace SinobigamiBot
                 SetStatus(line[0].Trim(), valueStr);
             }
         }
+        public override string Name
+        {
+            get { return User.Name; }
+        }
+
+        /// <summary>
+        /// コマンドでダメージを受けさせた際、接近戦ダメージでスロットが被ったNPC
+        /// </summary>
+        public NpcInfo OverlapDamageNpc { get; set; }
 
         /// <summary>
         /// ステータスを文字列にして返す
         /// </summary>
         /// <returns></returns>
-        public string UserStatus(bool useEmoji = false)
+        public override string UserStatus(bool useEmoji = true)
         {
-            var text = "──***" + NickOrName() + "***──\n";
+            var text = "──***" + NickOrName + "***──\n";
             List<string> boolKeys = new List<string>(),
                 intKeys = new List<string>(),
                 strKeys = new List<string>();
@@ -80,41 +74,7 @@ namespace SinobigamiBot
             return text;
         }
 
-        /// <summary>
-        /// 対応するキーのステータスを文字列に
-        /// </summary>
-        /// <param name="key"></param>
-        /// <param name="useEmoji"></param>
-        /// <returns></returns>
-        private string StatusToString(string key, bool useEmoji = false)
-        {
-            string str = "";
-            if (Status[key].GetType() == typeof(bool))
-            {
-                str = (bool)Status[key] ? "○" : "×";
-                if (useEmoji) str = (bool)Status[key] ? ":o:" : ":x:";
-            }
-            else
-            {
-                str = Status[key].ToString();
-            }
-            return str;
-        }
-
-        public UserInfo(User user, Dictionary<User, Emotion> emotions)
-        {
-            User = user;
-            Emotions = emotions;
-        }
-
-        public UserInfo(User user, Dictionary<User, Emotion> emotions, List<Secret> secrets)
-        {
-            User = user;
-            Emotions = emotions;
-            Secrets = secrets;
-        }
-
-        public UserInfo(User user, Dictionary<User, Emotion> emotions, List<Secret> secrets, Dictionary<string, object> status)
+        public UserInfo(User user, Dictionary<UserOrNpcInfo, Emotion> emotions, List<Secret> secrets, Dictionary<string, object> status)
         {
             User = user;
             Emotions = emotions;
@@ -122,83 +82,17 @@ namespace SinobigamiBot
             Status = status;
         }
 
-        public void SetStatus(string key, string data)
+        public override string NickOrName
         {
-            var value = ParseStatus(data);
-            if (Status.Keys.Contains(key)) Status[key] = value;
-            else Status.Add(key, value);
-        }
-
-        public string StatusToCSV()
-        {
-            List<string> str = new List<string>();
-            foreach (var key in Status.Keys)
+            get
             {
-                str.Add($"{key}={Status[key].ToString()}");
+                return User.Nickname != null ? User.Nickname : User.Name;
             }
-            return string.Join(",", str);
         }
 
-        public static Dictionary<string, object> StatusFormCSV(string csv)
+        public override string ToString()
         {
-            var result = new Dictionary<string, object>();
-            foreach (var item in csv.Split(','))
-            {
-                var sp = item.Split('=').Select(a => a.Trim()).ToArray();
-                if (sp[0] == "Status") continue; // Status= は除外
-                if (result.Keys.Contains(sp[0])) result[sp[0]] = ParseStatus(sp[1]);
-                else result.Add(sp[0], ParseStatus(sp[1]));
-            }
-            return result;
-        }
-
-        public static object ParseStatus(string str)
-        {
-            if (Regex.IsMatch(str, "(T|t)rue")) return true;
-            if (Regex.IsMatch(str, "(F|f)alse")) return false;
-            if (Regex.IsMatch(str, @"\d+")) return int.Parse(str);
-            return str;
-        }
-
-        public string NickOrName()
-        {
-            return User.Nickname != null ? User.Nickname : User.Name;
-        }
-
-        public void AddEmotion(User target, Emotion emotion)
-        {
-            if (Emotions.ContainsKey(target))
-                Emotions[target] = emotion;
-            else
-                Emotions.Add(target, emotion);
-        }
-
-        public void AddSecret(User target)
-        {
-            if (Secrets.Any(u => u.UserId == target.Id))
-                return;
-            else
-                Secrets.Add(new Secret(target));
-        }
-
-        public void AddSecret(string name)
-        {
-            Secrets.Add(new Secret(name));
-        }
-
-        public void AddPrizeSecret(string name)
-        {
-            Secrets.Add(new Secret(name));
-        }
-
-        private double Distance(System.Drawing.Point p1, System.Drawing.Point p2)
-        {
-            return Math.Abs(Math.Sqrt(Math.Pow((p1.X - p2.X), 2) + Math.Pow((p1.Y - p2.Y), 2)));
-        }
-
-        public new string ToString()
-        {
-            return $"{User.Name}";
+            return $"{NickOrName}";
         }
     }
 

@@ -49,6 +49,18 @@
       <HintPath>packages\Discord.Net.Modules.0.9.6\lib\net45\Discord.Net.Modules.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="DropNet, Version=1.10.23.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\DropNet.1.10.23.0\lib\net40\DropNet.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="HtmlAgilityPack, Version=1.4.9.5, Culture=neutral, PublicKeyToken=bd319b19eaf3b43a, processorArchitecture=MSIL">
+      <HintPath>packages\HtmlAgilityPack.1.4.9.5\lib\Net45\HtmlAgilityPack.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Markdown, Version=2.0.0.0, Culture=neutral, PublicKeyToken=1b320cc08ad5aa89, processorArchitecture=MSIL">
+      <HintPath>packages\Markdown.2.2.0\lib\net451\Markdown.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="NAudio, Version=1.7.3.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>packages\NAudio.1.7.3\lib\net35\NAudio.dll</HintPath>
       <Private>True</Private>
@@ -82,6 +94,10 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="WebDriver, Version=3.0.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>packages\Selenium.WebDriver.3.0.1\lib\net40\WebDriver.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="WebSocket4Net, Version=0.14.1.0, Culture=neutral, PublicKeyToken=eb4e154b696bf72a, processorArchitecture=MSIL">
       <HintPath>packages\WebSocket4Net.0.14.1\lib\net45\WebSocket4Net.dll</HintPath>
       <Private>True</Private>
@@ -90,19 +106,25 @@
   <ItemGroup>
     <Compile Include="Emotion.cs" />
     <Compile Include="Extensions.cs" />
+    <Compile Include="GeneralTalk.cs" />
     <Compile Include="IniFile.cs" />
+    <Compile Include="Label.cs" />
     <Compile Include="MakeGraph.cs" />
+    <Compile Include="NpcInfo.cs" />
     <Compile Include="Operation.cs" />
+    <Compile Include="PokeData.cs" />
+    <Compile Include="Pokemon.cs" />
     <Compile Include="PokeType.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Secret.cs" />
     <Compile Include="ServerData.cs" />
-    <Compile Include="SettingData.cs" />
-    <Compile Include="Settings.cs" />
+    <Compile Include="Setting.cs" />
     <Compile Include="StatusCommand.cs" />
     <Compile Include="UserInfo.cs" />
+    <Compile Include="UserOrNpcInfo.cs" />
     <Compile Include="VoiceSample.cs" />
+    <Compile Include="Yomiage.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

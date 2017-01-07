@@ -15,7 +15,7 @@ namespace SinobigamiBot
         private const string HelpFilePath = "./data/usage-status.txt";
 
         private ServerData Server { get; set; }
-        private UserInfo user;
+        private UserOrNpcInfo user;
 
         public StatusCommand(ServerData server)
         {
@@ -31,6 +31,7 @@ namespace SinobigamiBot
         public string ExcuteWithKaomoji(string argText)
         {
             string result = Excute(argText);
+            Server.SavePlayersInfo();
             bool success = false;
             if (Regex.IsMatch(result, @"設定したよ|削除したよ"))
                 success = true;
@@ -49,7 +50,7 @@ namespace SinobigamiBot
         /// </summary>
         /// <param name="argText"></param>
         /// <returns></returns>
-        public string Excute(string argText)
+        private string Excute(string argText)
         {
             var args = argText.ToNarrow().Trim().Split(' ').ToList();
             args.RemoveAll(s => s == "");
@@ -57,7 +58,7 @@ namespace SinobigamiBot
             if (args.Count == 0) return "引数を指定してね";
 
             // 第一引数がヘルプ
-            if (args[0] == "help" || args[0] == "usage")
+            if (args[0] == "help" || args[0] == "usage" || args[0] == "ヘルプ")
             {
                 return Help();
             }

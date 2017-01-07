@@ -8,6 +8,7 @@ namespace SinobigamiBot
 {
     static class Extensions
     {
+        static Random rand = new Random();
         /// <summary>
         /// ランダムに一つ取り出す
         /// </summary>
@@ -16,7 +17,6 @@ namespace SinobigamiBot
         /// <returns></returns>
         public static T Sample<T>(this List<T> self)
         {
-            var rand = new Random();
             return self[rand.Next(self.Count)];
         }
 
