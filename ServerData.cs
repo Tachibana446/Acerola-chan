@@ -439,5 +439,15 @@ namespace SinobigamiBot
             return System.IO.File.Exists($"{Program.serverDataFolder}/{server.Id}.txt");
         }
 
+        /// <summary>
+        /// サーバーファイルを削除する
+        /// </summary>
+        public void Delete()
+        {
+            if (ExistsUserInfoFile(Server))
+            {
+                System.IO.File.Delete($"{Program.serverDataFolder}/{Server.Id}.txt");
+            }
+        }
     }
 }

@@ -616,12 +616,7 @@ namespace SinobigamiBot
         /// <param name="e"></param>
         private void Initialize(MessageEventArgs e)
         {
-            ServerData server = GetServer(e);
-            if (server == null)
-            {
-                server = new ServerData(e.Server);
-                ServerDatas.Add(server);
-            }
+
         }
 
         /// <summary>
@@ -672,6 +667,10 @@ namespace SinobigamiBot
                 return;
             }
             var server = GetServer(e);
+            server.Delete();
+            ServerDatas.Remove(server);
+            server = GetServer(e);
+
             var userInfos = new List<UserOrNpcInfo>();
             var usernames = match.Groups[1].Value.Split(' ').Select(s => s.Trim()).ToList();
             foreach (var name in usernames)
@@ -1405,13 +1404,25 @@ namespace SinobigamiBot
         private ServerData GetServer(MessageEventArgs e)
         {
             if (!ServerDatas.Any(s => s.Server.Id == e.Server.Id))
-                return null;
+            {
+                var server = new ServerData(e.Server);
+                ServerDatas.Add(server);
+            }
             return ServerDatas.First(s => s.Server.Id == e.Server.Id);
         }
 
         private ServerData GetServer(Server server)
         {
-            return ServerDatas.First(s => s.Server.Id == server.Id);
+            try
+            {
+                return ServerDatas.First(s => s.Server.Id == server.Id);
+            }
+            catch
+            {
+                var s = new ServerData(server);
+                ServerDatas.Add(s);
+                return s;
+            }
         }
 
         /// <summary>
