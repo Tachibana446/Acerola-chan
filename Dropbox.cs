@@ -13,9 +13,9 @@ namespace SinobigamiBot
     public class Dropbox
     {
         DropNetClient Client;
-        SettingData setting;
+        Setting setting;
 
-        public Dropbox(SettingData _setting)
+        public Dropbox(Setting _setting)
         {
             setting = _setting;
             var appKey = setting.Data["DropAppKey"];

@@ -15,11 +15,11 @@ namespace SinobigamiBot
 
         public string SaveFilePath = "./yomiage.wav";
 
-        private SettingData Setting { get; set; }
+        private Setting Setting { get; set; }
 
         private Process process = null;
 
-        public Yomiage(SettingData setting)
+        public Yomiage(Setting setting)
         {
             Setting = setting;
         }

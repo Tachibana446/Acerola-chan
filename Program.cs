@@ -17,7 +17,7 @@ namespace SinobigamiBot
         static void Main(string[] args) => new Program().Start();
 
         DiscordClient client = new DiscordClient();
-        public static SettingData setting = new SettingData();
+        public static Setting setting = new Setting();
 
         Random random = new Random();
 
@@ -38,6 +38,13 @@ namespace SinobigamiBot
         /// 読み上げてくれるやつ
         /// </summary>
         Yomiage yomi;
+        /// <summary>
+        /// 削除依頼
+        /// </summary>
+        Dictionary<User, UserOrNpcInfo> removeOrder = new Dictionary<User, UserOrNpcInfo>();
+
+        GeneralTalk generalTalk = new GeneralTalk();
+        Pokemon pokemonTalk = new Pokemon();
 
         public static string[] SinobigamiStatus = new string[] { "器術", "体術", "忍術", "謀術", "戦術", "妖術" };
 
@@ -89,6 +96,9 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await ResetPlayersOrder(e);
                 // NPC の追加
                 client.MessageReceived += async (s, e) => await AddNpc(e);
+                // NPCの削除
+                client.MessageReceived += async (s, e) => await RemoveNpc(e);
+                client.MessageReceived += async (s, e) => await RemoveNpcOrder(e);
                 // Reload Users
                 client.MessageReceived += async (s, e) => await ReloadUserInfo(e);
                 // 関係図を作成し送信
@@ -149,10 +159,13 @@ namespace SinobigamiBot
                 client.MessageReceived += async (s, e) => await ShowUsage(e);
                 // 会話
                 client.MessageReceived += async (s, e) => await PutSerif(e);
+                client.MessageReceived += async (s, e) => await generalTalk.Do(e);
 
                 // クイズ // 解答の方を先にすること
                 client.MessageReceived += async (s, e) => await AnswerTypeQuiz(e);
                 client.MessageReceived += async (s, e) => await QuestionTypeQuiz(e);
+                // ポケモン図鑑
+                client.MessageReceived += async (s, e) => await pokemonTalk.Do(e);
 
                 // タイマー
                 client.MessageReceived += async (s, e) => await SetAlarm(e);
@@ -170,6 +183,7 @@ namespace SinobigamiBot
             client.ExecuteAndWait(async () => { await client.Connect(token, TokenType.Bot); });
         }
 
+
         /// <summary>
         /// NPCの追加
         /// </summary>
@@ -178,13 +192,64 @@ namespace SinobigamiBot
         private async Task AddNpc(MessageEventArgs e)
         {
             if (e.Message.IsAuthor) return;
-            var match = Regex.Match(e.Message.Text.ToNarrow(), "#NPC追加(.*)");
+            var match = Regex.Match(e.Message.Text.ToNarrow(), "^#NPC追加(.*)");
             if (!match.Success) return;
             var npcName = match.Groups[1].Value.Trim();
+            if (npcName == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にNPCの名前を入れてね" + Setting.SadKaomoji); return; }
             var server = GetServer(e);
+            if (server.Players.Any(p => p.Name == npcName))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" {npcName}というNPCはすでにいるよ{Setting.SadKaomoji}");
+                return;
+            }
             server.AddNpc(npcName);
-            await e.Channel.SendMessage(e.User.Mention + " NPCを追加したよ");
+            await e.Channel.SendMessage(e.User.Mention + " NPCを追加したよ" + Setting.HappyKaomoji);
             server.SavePlayersInfo();
+        }
+        /// <summary>
+        /// NPCを削除する依頼
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task RemoveNpcOrder(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            var match = Regex.Match(e.Message.Text.ToNarrow(), "^#NPC削除(.*)");
+            if (!match.Success) return;
+            var npcName = match.Groups[1].Value.Trim();
+            if (npcName == "") { await e.Channel.SendMessage(e.User.Mention + " 引数にNPCの名前を入れてね" + Setting.SadKaomoji); return; }
+            var server = GetServer(e);
+            UserOrNpcInfo npc = null;
+            try { npc = server.GetMatchPlayer(npcName); }
+            catch (Exception ex) { await e.Channel.SendMessage(e.User.Mention + " " + ex.Message); return; }
+            if (npc == null) { await e.Channel.SendMessage(e.User.Mention + " " + npcName + "にマッチするユーザーはいないよ" + Setting.SadKaomoji); return; }
+
+            removeOrder.Add(e.User, npc);
+            await e.Channel.SendMessage(e.User.Mention + $" {npc.Name}を削除する？(はい/いいえ)");
+        }
+        /// <summary>
+        /// 実際に削除する
+        /// </summary>
+        /// <param name="e"></param>
+        /// <returns></returns>
+        private async Task RemoveNpc(MessageEventArgs e)
+        {
+            if (e.Message.IsAuthor) return;
+            if (!removeOrder.Keys.Contains(e.User)) return;
+            if (Regex.IsMatch(e.Message.Text.ToNarrow(), @"(no|No|いいえ)$"))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" わかったー{Setting.HappyKaomoji}キャンセルしまーす");
+                removeOrder.Remove(e.User);
+            }
+            else if (Regex.IsMatch(e.Message.Text.ToNarrow(), @"(yes|Yes|はい)$"))
+            {
+                await e.Channel.SendMessage(e.User.Mention + $" はーい！{removeOrder[e.User].Name}を削除したよー！{Setting.HappyKaomoji}");
+                var npc = removeOrder[e.User];
+                var server = GetServer(e);
+                server.Players.Remove(npc);
+                server.AllUsers.Remove(npc);
+                removeOrder.Remove(e.User);
+            }
         }
 
         /// <summary>
@@ -231,7 +296,7 @@ namespace SinobigamiBot
         private void SaveLog(Exception e, MessageEventArgs eArgs)
         {
             SaveLog(e.ToString() + "\n" + e.Message);
-            eArgs.Channel.SendMessage(e.Message);
+            eArgs.Channel.SendMessage(e.StackTrace + "\n" + e.Message);
         }
 
         /// <summary>

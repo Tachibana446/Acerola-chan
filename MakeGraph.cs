@@ -57,7 +57,7 @@ namespace SinobigamiBot
             }
             foreach (var user in server.Plots.Keys)
                 foreach (var p in server.Plots[user])
-                    plots[p].Add(new Tuple<string, SizeF>(user.Name, g1.MeasureString(user.Name, meiryo)));
+                    plots[p - 1].Add(new Tuple<string, SizeF>(user.Name, g1.MeasureString(user.Name, meiryo)));
 
             foreach (var p in plots)
             {

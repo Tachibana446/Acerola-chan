@@ -40,7 +40,9 @@ namespace SinobigamiBot
         /// <param name="name"></param>
         public void AddNpc(string name)
         {
-            Players.Add(new NpcInfo(name));
+            var npc = new NpcInfo(name);
+            Players.Add(npc);
+            AllUsers.Add(npc);
         }
 
         /// <summary>
@@ -247,22 +249,18 @@ namespace SinobigamiBot
                 {
                     case "Id":
                         ulong id = ulong.Parse(value);
-                        nowUser = Server.Users.First(u => u.Id == id);
-                        if (nowUser == null)
-                            skipToNextUser = true;
+                        try
+                        {
+                            nowUser = Server.Users.First(u => u.Id == id);
+                        }
+                        catch
+                        {
+
+                        }
                         break;
                     case "XY":
                         var xy = value.Split(',').Select(a => int.Parse(a)).ToArray();
                         nowPoint = new Point(xy[0], xy[1]);
-                        break;
-                    case "Emotion":
-                        var nickAndEmo = value.Split(',');
-                        string toName = nickAndEmo[0];
-                        Emotion emo = new Emotion(nickAndEmo[1], Emotion.ParseEmotionType(nickAndEmo[2]));
-                        UserOrNpcInfo toUser = AllUsers.First(u => u.NickOrName == toName);
-                        if (toUser == null)
-                            continue;
-                        nowEmotions.Add(toUser, emo);
                         break;
                     case "Secret":
                         nowSecrets.Add(Secret.FromCSV(value));
@@ -279,6 +277,44 @@ namespace SinobigamiBot
 
             }
             Players = result;
+            AllUsers = new List<UserOrNpcInfo>(Players);
+            // Emotion
+            UserOrNpcInfo nowInfo = null;
+            foreach (var line in lines)
+            {
+                if (line.Trim() == "[User]")
+                {
+                    nowInfo = null;
+                    nowEmotions = new Dictionary<UserOrNpcInfo, Emotion>();
+                    continue;
+                }
+                if (line.Trim() == "[UserEnd]")
+                {
+                    if (nowInfo != null)
+                        nowInfo.Emotions = nowEmotions;
+                    continue;
+                }
+                var splited = line.Split('=').ToArray();
+                if (splited.Length < 2)
+                    continue;
+                string key = splited[0], value = splited[1];
+                if (key == "Name")
+                {
+                    nowInfo = AllUsers.First(i => i.Name == value);
+                }
+                else if (key == "Emotion")
+                {
+                    var nickAndEmo = value.Split(',');
+                    string toName = nickAndEmo[0].Trim();
+                    Emotion emo = new Emotion(nickAndEmo[1], Emotion.ParseEmotionType(nickAndEmo[2]));
+                    UserOrNpcInfo toUser = null;
+                    try { toUser = AllUsers.First(u => u.NickOrName == toName); }
+                    catch { continue; }
+                    if (toUser == null)
+                        continue;
+                    nowEmotions.Add(toUser, emo);
+                }
+            }
         }
 
         /// <summary>

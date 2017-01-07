@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SinobigamiBot
 {
-    public class SettingData
+    public class Setting
     {
         public bool PlayDiceSE = true;
         /// <summary>
@@ -20,6 +20,18 @@ namespace SinobigamiBot
 
         public string Token { get; private set; }
         public string ClientId { get; private set; }
+
+        private static List<string> _happyKaomoji, _sadKaomoji;
+        public static string HappyKaomoji { get { return _happyKaomoji.Sample(); } }
+        public static string SadKaomoji { get { return _sadKaomoji.Sample(); } }
+
+        static Setting()
+        {
+            var happy = "(◍ ´꒳` ◍)b\n٩(๑•̀ω•́๑)۶\n╭(๑•̀ㅂ•́)و \n(｡☌ᴗ☌｡)\n٩꒰｡•◡•｡꒱۶\n( ๑ ╹ ◡ ╹ ๑ )".Split('\n');
+            _happyKaomoji = happy.ToList();
+            var sad = "(｡>д<｡)\nヾ(｡>﹏<｡)ﾉ\n(ﾟﾉ´Д`ﾟ)ﾉﾟ\n( ´・ω・｀)\no´･ε･`o\n(≧ﾍ≦ )".Split('\n');
+            _sadKaomoji = sad.ToList();
+        }
 
         /// <summary>
         /// 体力の初期値
@@ -56,7 +68,7 @@ namespace SinobigamiBot
             set { SetData(nameof(IsYomiageMessage), string.Join(",", value)); }
         }
 
-        public SettingData()
+        public Setting()
         {
             Load();
         }
