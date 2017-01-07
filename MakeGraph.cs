@@ -6,45 +6,19 @@ using System.Threading.Tasks;
 using System.Drawing;
 using Discord;
 using System.Drawing.Drawing2D;
-using HeyRed.MarkdownSharp;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 using System.IO;
 
 namespace SinobigamiBot
 {
     class MakeGraph
     {
-        public static void MakePlotGraph(string text, string path = "./img.png")
-        {
-            var fontSize = 24;
-
-            Bitmap img = new Bitmap(100, 100);
-            Graphics g = Graphics.FromImage(img);
-
-            Font fnt = new Font("メイリオ", fontSize);
-            g.DrawString(text, fnt, Brushes.DarkBlue, 5, 5);
-            var size = g.MeasureString(text, fnt);
-
-            var img2 = new Bitmap((int)size.Width, (int)size.Height);
-            var g2 = Graphics.FromImage(img2);
-            g2.FillRectangle(Brushes.White, g2.VisibleClipBounds);
-            g2.DrawString(text, fnt, Brushes.DarkBlue, 0, 0);
-
-            img2.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-
-            fnt.Dispose();
-            g.Dispose();
-            g2.Dispose();
-        }
-
         public static void MakePlotGraph(ServerData server, string path = "./plot.png")
         {
             Bitmap img1 = new Bitmap(100, 100);
             Graphics g1 = Graphics.FromImage(img1);
-            var plots = new List<List<Tuple<string, SizeF>>>(); // 1 -> [ <name,size>,<name,size> ]
+            var plots = new List<List<Label>>();
             for (int i = 0; i < 6; i++)
-                plots.Add(new List<Tuple<string, SizeF>>());
+                plots.Add(new List<Label>());
             List<double> maxWidths = new List<double>(), heights = new List<double>();
             double maxHeight = 0, allWidth = 0;
             var num = "壱弐参肆伍陸";
@@ -53,26 +27,26 @@ namespace SinobigamiBot
             for (int i = 0; i < 6; i++)
             {
                 var text = num[i].ToString();
-                plots[i].Add(new Tuple<string, SizeF>(text, g1.MeasureString(text, gyosho)));
+                plots[i].Add(new Label(text, gyosho, Brushes.Black, g1));
             }
             foreach (var user in server.Plots.Keys)
                 foreach (var p in server.Plots[user])
-                    plots[p - 1].Add(new Tuple<string, SizeF>(user.Name, g1.MeasureString(user.Name, meiryo)));
+                    plots[p - 1].Add(new Label(user.Name, meiryo, Brushes.Black, g1));
             // 奈落など
             foreach (var pair in server.Narakus)
             {
-                plots[pair.Item1 - 1].Add(new Tuple<string, SizeF>(pair.Item2, g1.MeasureString(pair.Item2, meiryo)));
+                plots[pair.Item1 - 1].Add(new Label(pair.Item2, gyosho, Brushes.Red, g1));
             }
 
             foreach (var p in plots)
             {
                 double max = 72;
                 double height = 0;
-                foreach (var size in p)
+                foreach (var label in p)
                 {
-                    if (size.Item2.Width > max)
-                        max = size.Item2.Width;
-                    height += size.Item2.Height;
+                    if (label.Size.Width > max)
+                        max = label.Size.Width;
+                    height += label.Size.Height;
                 }
                 height += 2;
                 maxWidths.Add(max);
@@ -95,11 +69,11 @@ namespace SinobigamiBot
             x = 0; float y = 0;
             for (int i = 0; i < 6; i++)
             {
-                var pair = plots[i].First();
-                plots[i].Remove(pair);
-                g2.DrawString(pair.Item1, gyosho, Brushes.Black, new PointF((float)(x + maxWidths[i] / 2 - pair.Item2.Width / 2), 0));
+                var label = plots[i].First();
+                plots[i].Remove(label);
+                g2.DrawString(label.Text, label.font, label.brush, new PointF((float)(x + maxWidths[i] / 2 - label.Size.Width / 2), 0));
                 x += (float)maxWidths[i];
-                if (y < pair.Item2.Height) y = pair.Item2.Height;
+                if (y < label.Size.Height) y = label.Size.Height;
             }
             Pen pen = new Pen(Brushes.Black, 2);
             g2.DrawLine(pen, 0, y, (float)allWidth, y);
@@ -109,11 +83,11 @@ namespace SinobigamiBot
             foreach (var list in plots)
             {
                 y = oldY;
-                foreach (var pair in list)
+                foreach (var label in list)
                 {
-                    float cx = x + (float)(maxWidths[index] / 2) - pair.Item2.Width / 2;
-                    g2.DrawString(pair.Item1, meiryo, Brushes.Black, new PointF(cx, y));
-                    y += pair.Item2.Height;
+                    float cx = x + (float)(maxWidths[index] / 2) - label.Size.Width / 2;
+                    g2.DrawString(label.Text, label.font, label.brush, new PointF(cx, y));
+                    y += label.Size.Height;
                 }
                 x += (float)maxWidths[index];
                 index++;
@@ -124,6 +98,7 @@ namespace SinobigamiBot
             gyosho.Dispose(); meiryo.Dispose();
             g1.Dispose(); g2.Dispose();
         }
+
 
         public static void MakeRelationGraph(List<UserOrNpcInfo> users, string path = "./relation.png")
         {
@@ -248,23 +223,6 @@ namespace SinobigamiBot
             g.Dispose();
         }
 
-        public static void SaveMarkDown(string markdown)
-        {
-            var mark = new Markdown();
-            var text = mark.Transform(markdown);
-            var file = new FileInfo("markdown.html");
-            var sw = new System.IO.StreamWriter(file.FullName);
-            sw.WriteLine(text);
-            sw.Close();
-
-            var chrome = new ChromeDriver();
-            var url = $"file:///{file.FullName.Replace('\\', '/')}";
-
-            chrome.Navigate().GoToUrl(url);
-            var ss = chrome.GetScreenshot();
-            ss.SaveAsFile("./markdown.png", System.Drawing.Imaging.ImageFormat.Png);
-            chrome.Close();
-        }
     }
 
     class DrawStringData

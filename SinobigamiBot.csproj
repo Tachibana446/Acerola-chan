@@ -104,11 +104,11 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Dropbox.cs" />
     <Compile Include="Emotion.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="GeneralTalk.cs" />
     <Compile Include="IniFile.cs" />
+    <Compile Include="Label.cs" />
     <Compile Include="MakeGraph.cs" />
     <Compile Include="NpcInfo.cs" />
     <Compile Include="Operation.cs" />
