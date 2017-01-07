@@ -207,7 +207,7 @@ namespace SinobigamiBot
             return Math.Abs(Math.Sqrt(Math.Pow((p1.X - p2.X), 2) + Math.Pow((p1.Y - p2.Y), 2)));
         }
 
-        public virtual string ToString()
+        public override string ToString()
         {
             return $"{Name}";
         }

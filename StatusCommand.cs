@@ -154,7 +154,7 @@ namespace SinobigamiBot
             {
                 GetStatus(sp[0]);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 user.Status.Add(sp[0], UserInfo.ParseStatus(sp[1]));
             }
